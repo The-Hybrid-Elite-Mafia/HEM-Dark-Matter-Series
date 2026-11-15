@@ -883,7 +883,9 @@ void PanelView::drawBottomBar(Renderer& r, PanelBinding& b, const PanelControlle
     hMeter(r, def_.outputMeter, b.meter(def_.meterOutL), b.meter(def_.meterOutR));
     r.text(TextStyle::Title, "OUTPUT", def_.outputMeter.x - 18, base, kTextBright, Align::Right, TextFx::Shadowed);
     r.text(TextStyle::Title, formatValue(dout, b.value(def_.outputParam)), def_.outputTrim.r() - 10, base, ho ? kCyan : kAmber, Align::Right, TextFx::NeonCrisp);
-    r.text(TextStyle::Heading, def_.footer, def_.footerBox.cx(), def_.footerBox.cy() + 24, rgb8(0xD8B07E), Align::Center, TextFx::Shadowed, def_.footerBox.w);
+    const bool compact = def_.w < 3000.0f;
+    r.text(compact ? TextStyle::Tab : TextStyle::Heading, def_.footer, def_.footerBox.cx(), def_.footerBox.cy() + (compact ? 18 : 24),
+           rgb8(0xD8B07E), Align::Center, TextFx::Shadowed, def_.footerBox.w);
 }
 
 void PanelView::drawPresetMenu(Renderer& r, PanelBinding& b, const PanelController& c) {

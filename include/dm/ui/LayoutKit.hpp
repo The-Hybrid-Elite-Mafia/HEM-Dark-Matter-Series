@@ -64,25 +64,23 @@ inline void modeBay(PanelDef& d, Box b, std::string title, Accent a, Icon icon, 
     d.widgets[d.widgets.size() - 5].screen = {b.x + b.w * 0.20f, b.y + 22, b.w * 0.60f, b.h - 44};
 }
 
-// Compact chassis for the split plug-ins: same top / bottom bars scaled into a w x h plate.
+// Compact chassis for the split plug-ins: same top / bottom bars packed into a w x h plate.
 inline void compactChassis(PanelDef& d, std::string name, float w, float h) {
     d.name = std::move(name);
     d.w = w; d.h = h;
-    d.footer = "~ HYBRID ELITE MAFIA ~";
-    d.title = {270, 58, w * 0.40f, 150};
-    const float pr = w - 1830;   // the right-hand cluster keeps the full-size spacing
-    d.preset = {pr + 0, 68, 560, 104};
-    d.presetPrev = {pr + 568, 68, 104, 104};
-    d.presetNext = {pr + 680, 68, 104, 104};
-    d.presetSave = {pr + 806, 68, 116, 104};
-    d.undo = {pr + 1000, 68, 116, 104};
-    d.redo = {pr + 1130, 68, 116, 104};
-    d.bypass = {pr + 1300, 64, 240, 112};
-    d.inputTrim = {300, h - 150, 200, 90};
-    d.inputMeter = {640, h - 126, 420, 42};
-    d.footerBox = {1120, h - 165, w - 2240, 120};
-    d.outputMeter = {w - 1070, h - 126, 420, 42};
-    d.outputTrim = {w - 490, h - 150, 200, 90};
+    d.title = {270, 58, w - 1662 - 300, 150};
+    d.bypass = {w - 502, 64, 240, 112};
+    d.redo = {w - 670, 68, 116, 104};
+    d.undo = {w - 800, 68, 116, 104};
+    d.presetSave = {w - 976, 68, 116, 104};
+    d.presetNext = {w - 1102, 68, 104, 104};
+    d.presetPrev = {w - 1214, 68, 104, 104};
+    d.preset = {w - 1662, 68, 440, 104};
+    d.inputTrim = {290, h - 150, 180, 90};
+    d.inputMeter = {630, h - 126, 300, 42};
+    d.footerBox = {w * 0.5f - 280, h - 165, 560, 120};
+    d.outputMeter = {w - 730, h - 126, 300, 42};
+    d.outputTrim = {w - 420, h - 150, 160, 90};
 }
 // A curve handle on an Analyzer display.
 inline Widget handle(int freqP, int gainP, int band, Box display, Accent a, std::string label) {

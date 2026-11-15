@@ -104,6 +104,13 @@ public:
     static constexpr std::size_t kOn = G_Count, kFirst = G_Count + 1;
     SplitPlugin() : Base(kSplitParams<Module>) {}
     Module& module() noexcept { return m_; }
+    // Factory presets = the rack's presets; each split takes only its own module's settings from them.
+    bool loadPreset(std::size_t i) noexcept {
+        const auto p = rackPresets();
+        if (i >= p.size()) return false;
+        (void)this->loadPresetValues(p[i].values);   // ids of the other modules are skipped
+        return true;
+    }
     void prepareCore(float sr) { m_.prepare(sr); }
     void resetCore() noexcept { m_.reset(); }
     void updateCore(const float* v, const float* old, bool) noexcept {

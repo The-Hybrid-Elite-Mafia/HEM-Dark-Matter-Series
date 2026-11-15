@@ -142,6 +142,19 @@ int main(int argc, char** argv) {
     rack.loadPreset(0);
     auto rackBind = bindSyndicate(rack);
     jobs.push_back({"HEM_SYNDICATE_RACK", [&] { feedShell(rack); }, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden()});
+    static dm::sr::HemSat sSat; static dm::sr::HemComp sComp; static dm::sr::HemTransient sTrans;
+    static dm::sr::HemTone sTone; static dm::sr::HemMod sMod; static dm::sr::HemMax sMax;
+    sSat.prepare(48000, 512); sComp.prepare(48000, 512); sTrans.prepare(48000, 512);
+    sTone.prepare(48000, 512); sMod.prepare(48000, 512); sMax.prepare(48000, 512);
+    static auto bSat = bindSplit(sSat), bComp = bindSplit(sComp), bTrans = bindSplit(sTrans);
+    static auto bTone = bindSplit(sTone), bMod = bindSplit(sMod), bMax = bindSplit(sMax);
+    bSat->loadPreset(0); bComp->loadPreset(0); bTrans->loadPreset(2); bTone->loadPreset(0); bMod->loadPreset(12); bMax->loadPreset(1);
+    jobs.push_back({"HEM_SAT", [&] { feedShell(sSat); }, [&]() -> PanelBinding& { return *bSat; }, splitPanel(SplitKind::Sat), shellHidden()});
+    jobs.push_back({"HEM_COMP", [&] { feedShell(sComp); }, [&]() -> PanelBinding& { return *bComp; }, splitPanel(SplitKind::Comp), shellHidden()});
+    jobs.push_back({"HEM_TRANSIENT", [&] { feedShell(sTrans); }, [&]() -> PanelBinding& { return *bTrans; }, splitPanel(SplitKind::Transient), shellHidden()});
+    jobs.push_back({"HEM_TONE", [&] { feedShell(sTone); }, [&]() -> PanelBinding& { return *bTone; }, splitPanel(SplitKind::Tone), shellHidden()});
+    jobs.push_back({"HEM_MOD", [&] { feedShell(sMod); }, [&]() -> PanelBinding& { return *bMod; }, splitPanel(SplitKind::Mod), shellHidden()});
+    jobs.push_back({"HEM_MAX", [&] { feedShell(sMax); }, [&]() -> PanelBinding& { return *bMax; }, splitPanel(SplitKind::Max), shellHidden()});
     jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [] {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
 
     int failures = 0;

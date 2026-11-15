@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <type_traits>
 
 namespace dm::ui {
 
@@ -65,6 +66,39 @@ std::unique_ptr<PanelBinding> bindSyndicate(dm::sr::SyndicateRack& e) {
     };
     return std::make_unique<EngineBinding<dm::sr::SyndicateRack>>(e, dm::sr::rackPresets(), meter, feed);
 }
+
+template <class M>
+std::unique_ptr<PanelBinding> bindSplit(dm::sr::SplitPlugin<M>& e) {
+    using E = dm::sr::SplitPlugin<M>;
+    constexpr std::size_t first = E::kFirst;
+    auto meter = [](E& v, int s) -> float {
+        M& m = v.module();
+        if constexpr (std::is_same_v<M, dm::sr::SatModule>) { if (s == SrSat) return m.satMeterDb(); }
+        if constexpr (std::is_same_v<M, dm::sr::CompModule>) { if (s == SrGr) return -std::fabs(m.grDb()); }
+        if constexpr (std::is_same_v<M, dm::sr::TransientModule>) { if (s == SrTransient) return m.envelopeDb(); }
+        if constexpr (std::is_same_v<M, dm::sr::ModModule>) { if (s == SrCorr) return m.correlation(); }
+        if constexpr (std::is_same_v<M, dm::sr::MaxModule>) { if (s >= SrBandL && s <= SrBandH) return m.bandActivity(s - SrBandL); }
+        return shellMeter(v, s);
+    };
+    auto feed = [](E& v, DisplayKind k, int src, std::vector<float>& out) {
+        if constexpr (std::is_same_v<M, dm::sr::ToneModule>) {
+            std::array<float, M::kN> vals{};
+            for (std::size_t i = 0; i < vals.size(); ++i) vals[i] = v.params().get(first + i);
+            if (k == DisplayKind::Analyzer)
+                spectrumAndCurve(v.module().analyzer(), [&](float hz) { return M::curveDb(vals.data(), hz, v.sampleRate()); }, out);
+            else if (k == DisplayKind::Handles && !out.empty()) out[0] = M::bandHz(vals.data(), src);
+        } else {
+            (void)v; (void)k; (void)src; (void)out;
+        }
+    };
+    return std::make_unique<EngineBinding<E>>(e, dm::sr::rackPresets(), meter, feed);
+}
+template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemSat&);
+template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemComp&);
+template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemTransient&);
+template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemTone&);
+template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemMod&);
+template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemMax&);
 
 std::vector<int> phantomVoxHidden() { return {dm::pv::AutoGainOn, dm::pv::Tempo}; }
 
