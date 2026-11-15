@@ -30,8 +30,14 @@ add_library(dm_phantom_vox STATIC
 target_include_directories(dm_phantom_vox PUBLIC include)
 target_link_libraries(dm_phantom_vox PUBLIC dm_build_flags)
 
+add_library(dm_syndicate STATIC
+    src/syndicate/Modules.cpp
+    src/syndicate/SyndicateRack.cpp)
+target_include_directories(dm_syndicate PUBLIC include)
+target_link_libraries(dm_syndicate PUBLIC dm_build_flags)
+
 # ---- Tests ---------------------------------------------------------------------------------------------
 enable_testing()
-add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp)
-target_link_libraries(dm_tests PRIVATE dm_phantom_vox)
+add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp)
+target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate)
 add_test(NAME dm_tests COMMAND dm_tests)
