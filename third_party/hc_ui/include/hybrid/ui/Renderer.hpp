@@ -12,7 +12,7 @@
 //     only re-draws moving parts on top of it.
 //   * Bloom: quads flagged emissive are also drawn into a half-resolution light
 //     buffer, blurred at two radii and added back before the final sRGB encode.
-//   * Textures: chassis (faceplate), parts atlas, Poppins atlas — all charged to the
+//   * Textures: chassis (faceplate), parts atlas, font atlas — all charged to the
 //     UI VRAM budget. Draw calls per frame: 1 scene batch + 1 bloom batch + post passes.
 //  All drawing coordinates are DESIGN units (faceplate pixels); the Canvas maps them.
 // =============================================================================

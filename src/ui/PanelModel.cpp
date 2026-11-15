@@ -82,19 +82,19 @@ std::vector<LayoutIssue> checkLayout(const PanelDef& def, const PanelBinding& b,
 namespace {
 void chassis(PanelDef& d, std::string name) {
     d.name = std::move(name);
-    d.title = {150, 58, 1600, 150};
-    d.preset = {1810, 72, 760, 120};
-    d.presetPrev = {2575, 72, 110, 120};
-    d.presetNext = {2690, 72, 110, 120};
-    d.presetSave = {2815, 72, 120, 120};
-    d.undo = {2995, 72, 120, 120};
-    d.redo = {3120, 72, 120, 120};
-    d.bypass = {3300, 72, 390, 120};
-    d.inputTrim = {175, 1995, 300, 110};
-    d.inputMeter = {495, 2022, 760, 56};
-    d.footerBox = {1300, 1985, 1240, 130};
-    d.outputMeter = {2585, 2022, 760, 56};
-    d.outputTrim = {3365, 1995, 300, 110};
+    d.title = {270, 58, 1500, 150};
+    d.preset = {1815, 68, 665, 104};
+    d.presetPrev = {2488, 68, 104, 104};
+    d.presetNext = {2600, 68, 104, 104};
+    d.presetSave = {2740, 68, 116, 104};
+    d.undo = {3040, 68, 116, 104};
+    d.redo = {3170, 68, 116, 104};
+    d.bypass = {3338, 64, 240, 112};
+    d.inputTrim = {300, 2010, 200, 90};
+    d.inputMeter = {640, 2034, 560, 42};
+    d.footerBox = {1300, 1995, 1240, 120};
+    d.outputMeter = {2770, 2034, 560, 42};
+    d.outputTrim = {3350, 2010, 200, 90};
 }
 Widget knob(int p, float cx, float cy, float r, Accent a, std::string label, float size = 1.0f) {
     Widget w; w.kind = Kind::Knob; w.param = p; w.box = circleBox(cx, cy, r); w.accent = a; w.label = std::move(label); w.size = size;
@@ -160,9 +160,9 @@ PanelDef phantomVoxPanel() {
     d.widgets.push_back(bay({2820, lt, 850, lh}, "", Accent::Gold));
 
     // Column 1: GATE fader + GR / DS meters, COMP + COLOR, DE-ESS + FOCUS
-    d.widgets.push_back(fader(Gate, {215, 900, 130, 990}, Accent::Cyan, "GATE"));
-    d.widgets.push_back(meter(4, {420, 900, 46, 990}, "GR", Accent::Cyan, -24, 0, true));
-    d.widgets.push_back(meter(5, {520, 900, 46, 990}, "DS", Accent::Cyan, -24, 0, true));
+    d.widgets.push_back(fader(Gate, {200, 900, 130, 990}, Accent::Cyan, "GATE"));
+    d.widgets.push_back(meter(4, {468, 900, 46, 990}, "GR", Accent::Cyan, -24, 0, true));
+    d.widgets.push_back(meter(5, {560, 900, 46, 990}, "DS", Accent::Cyan, -24, 0, true));
     d.widgets.push_back(knob(Comp, 820, 1010, 150, Accent::Orange, "COMP"));
     d.widgets.push_back(readout(Color, {650, 1245, 340, 88}, "COLOR", Accent::Orange));
     d.widgets.push_back(knob(DeEss, 820, 1555, 150, Accent::Orange, "DE-ESS"));

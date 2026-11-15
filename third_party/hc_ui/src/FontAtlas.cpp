@@ -12,7 +12,7 @@ namespace hc::ui {
 
 namespace {
 constexpr std::uint32_t kFirst = 32, kLatin1Count = 224, kAsciiCount = 95;
-const char* const kFaceFiles[kFaceCount] = {"Poppins-Medium.ttf", "Poppins-SemiBold.ttf", "Poppins-Bold.ttf"};
+const char* const kFaceFiles[kFaceCount] = {"Barlow-Regular.ttf", "Barlow-Medium.ttf", "Barlow-SemiBold.ttf"};
 constexpr int kPad = FontAtlas::kBlurRadius + 2;
 
 const stbtt_fontinfo* info(const std::vector<std::uint8_t>& blob) { return reinterpret_cast<const stbtt_fontinfo*>(blob.data()); }

@@ -1,9 +1,9 @@
 #pragma once
 // =============================================================================
-//  FontAtlas — Poppins (SIL OFL 1.1, bundled in assets/fonts) baked into ONE
+//  FontAtlas — Barlow (SIL OFL 1.1, bundled in assets/fonts) baked into ONE
 //  two-channel atlas at the current canvas scale, so text is pixel-crisp at any size:
 //    R = glyph coverage, G = the same coverage blurred (soft shadows, engraving, glow).
-//  Glyph advances only: Poppins keeps its kerning in a GPOS layout stb_truetype can't
+//  Glyph advances only: the font keeps its kerning in a GPOS layout stb_truetype can't
 //  read, so pairs like "AV" are not tightened. Pure CPU; the renderer uploads pixels() as RG8.
 // =============================================================================
 #include <array>
@@ -51,28 +51,29 @@ struct TextStyleSpec {
     bool  latin1;      // true: U+0020..U+00FF, false: printable ASCII only
 };
 inline constexpr std::array<TextStyleSpec, kTextStyleCount> kTextStyles{{
-    {Face::SemiBold, 24.0f, false},   // Caption
-    {Face::SemiBold, 30.0f, false},   // Label
-    {Face::SemiBold, 28.0f, true},    // Value
-    {Face::SemiBold, 34.0f, true},    // Title
-    {Face::Bold, 34.0f, true},        // Button
-    {Face::SemiBold, 40.0f, false},   // Tab
-    {Face::Bold, 52.0f, true},        // Panel
-    {Face::Medium, 28.0f, true},      // Sub
-    {Face::Bold, 56.0f, false},       // Heading
-    {Face::Medium, 32.0f, true},      // Status
+    // HEM Dark Matter: Barlow (Regular / Medium / SemiBold in the Medium / SemiBold / Bold slots).
+    {Face::SemiBold, 28.0f, false},   // Caption
+    {Face::SemiBold, 38.0f, false},   // Label
+    {Face::SemiBold, 34.0f, true},    // Value
+    {Face::Medium, 46.0f, true},      // Title
+    {Face::Bold, 40.0f, true},        // Button
+    {Face::Medium, 54.0f, false},     // Tab
+    {Face::Medium, 58.0f, true},      // Panel
+    {Face::Medium, 32.0f, true},      // Sub
+    {Face::Bold, 70.0f, false},       // Heading
+    {Face::Medium, 40.0f, true},      // Status
     {Face::Bold, 96.0f, false},       // Display
-    {Face::SemiBold, 26.0f, false},   // DisplayCap
-    {Face::Medium, 18.0f, true},      // Micro
-    {Face::SemiBold, 20.0f, true},    // Small
-    {Face::Bold, 22.0f, true},        // SmallBold
-    {Face::Medium, 24.0f, true},      // Body
-    {Face::Bold, 26.0f, true},        // BodyBold
+    {Face::SemiBold, 30.0f, false},   // DisplayCap
+    {Face::Medium, 22.0f, true},      // Micro
+    {Face::SemiBold, 24.0f, true},    // Small
+    {Face::Bold, 26.0f, true},        // SmallBold
+    {Face::Medium, 28.0f, true},      // Body
+    {Face::Bold, 30.0f, true},        // BodyBold
 }};
 
 struct FontSet {
     std::array<std::vector<std::uint8_t>, kFaceCount> ttf;
-    // Loads Poppins-Medium/SemiBold/Bold.ttf from `dir`.
+    // Loads Barlow-Regular/Medium/SemiBold.ttf from `dir`.
     [[nodiscard]] static std::optional<FontSet> load(const std::filesystem::path& dir, std::string* error);
 };
 

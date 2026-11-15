@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
     auto pvBind = bindPhantomVox(pv);
     std::vector<Job> jobs;
     jobs.push_back({"HEM_PHANTOM_VOX",
-                    [] { std::vector<float> l, r; vocal(l, r, 48000, 48000 * 3);
+                    [] { std::vector<float> l, r; vocal(l, r, 48000, 48000 * 3 - 19200);   // stop mid-phrase so the meters + analyzer show a live voice
                          for (std::size_t p = 0; p < l.size(); p += 512) pv.process(l.data() + p, r.data() + p, int(std::min<std::size_t>(512, l.size() - p))); },
                     [&]() -> PanelBinding& { return *pvBind; }, phantomVoxPanel(), phantomVoxHidden()});
 
