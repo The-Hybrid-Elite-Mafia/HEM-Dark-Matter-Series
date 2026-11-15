@@ -8,6 +8,7 @@ void runSyndicateTests();
 void runApexTests();
 void runIronLockTests();
 void runRiderDarkMatterTests();
+void runChainbreakerTests();
 
 int main(int argc, char** argv) {
     auto want = [&](const char* k) { return argc < 2 || std::strcmp(argv[1], k) == 0; };
@@ -16,6 +17,7 @@ int main(int argc, char** argv) {
     if (want("ax")) runApexTests();
     if (want("il")) runIronLockTests();
     if (want("rd")) runRiderDarkMatterTests();
+    if (want("cb")) runChainbreakerTests();
     std::printf("\n%d checks, %d failed\n", dmt::gChecks, dmt::gFails);
     return dmt::gFails == 0 ? 0 : 1;
 }

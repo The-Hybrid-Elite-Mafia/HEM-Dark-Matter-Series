@@ -52,8 +52,12 @@ add_library(dm_darkmatter STATIC src/darkmatter/DarkMatter4D.cpp)
 target_include_directories(dm_darkmatter PUBLIC include)
 target_link_libraries(dm_darkmatter PUBLIC dm_build_flags)
 
+add_library(dm_chainbreaker STATIC src/chainbreaker/Chainbreaker108.cpp)
+target_include_directories(dm_chainbreaker PUBLIC include)
+target_link_libraries(dm_chainbreaker PUBLIC dm_build_flags)
+
 # ---- Tests ---------------------------------------------------------------------------------------------
 enable_testing()
-add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp)
-target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter)
+add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp)
+target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker)
 add_test(NAME dm_tests COMMAND dm_tests)

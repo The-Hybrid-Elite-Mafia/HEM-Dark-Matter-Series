@@ -344,4 +344,23 @@ inline constexpr float kDuckReleaseMinMs = 50.0f;   // ASSUMED: SHAPE 0%
 inline constexpr float kDuckReleaseMaxMs = 1500.0f; // ASSUMED: SHAPE 100%
 inline constexpr float kGrainWindowMs = 60.0f;  // ASSUMED: 400% MULTIPLIER grain size
 } // namespace d4
+
+namespace cb { // ================================ HEM CHAINBREAKER 108 =====================================
+inline constexpr float kDefFlux        = 30.0f;   // ASSUMED (stutter trigger probability per beat)
+inline constexpr float kDefStutX       = 50.0f;   // ASSUMED
+inline constexpr float kDefStutY       = 60.0f;   // ASSUMED
+inline constexpr float kStutFadeMs     = 2.0f;    // ASSUMED click-free gate edges
+inline constexpr int   kStutDivs       = 5;       // ASSUMED: X pad picks 1/2, 1/4, 1/8, 1/16, 1/32 of a beat
+inline constexpr float kDefClipLow     = 200.0f;  // ASSUMED
+inline constexpr float kDefClipHigh    = 3000.0f; // ASSUMED
+inline constexpr float kDefDrive       = 20.0f;   // ASSUMED
+inline constexpr float kDriveMaxGain   = 8.0f;    // ASSUMED: DRIVE 100% -> x8 into the clippers
+inline constexpr float kDefGrainMix    = 25.0f;   // ASSUMED
+inline constexpr float kGrainWindowMs  = 45.0f;   // ASSUMED
+inline constexpr float kEqDefHz[4]     = {80.0f, 400.0f, 2500.0f, 10000.0f}; // ASSUMED
+inline constexpr float kBroadcastHz[3] = {100.0f, 1000.0f, 8000.0f};         // ASSUMED
+inline constexpr float kGraphicHz[5]   = {40.0f, 150.0f, 800.0f, 3000.0f, 10000.0f}; // ASSUMED
+inline constexpr float kToneTiltDb     = 6.0f;    // ASSUMED: master TONE full travel
+inline constexpr float kCrossfeedHz    = 700.0f;  // ASSUMED
+} // namespace cb
 } // namespace dm::assumed
