@@ -37,3 +37,21 @@ jobs:
         with:
           name: test-report
           path: test-report.txt
+
+      - name: Faceplate pictures (Mesa software OpenGL)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./tools/ci/fetch-mesa.ps1 -TargetDirs build/Release
+          ./build/Release/dm_faceplate_snapshot.exe --out faceplates --width 1920 --assets build/Release/assets 2>&1 | Tee-Object -FilePath faceplate-report.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Upload faceplate pictures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: faceplates
+          path: |
+            faceplates/*.png
+            faceplate-report.txt

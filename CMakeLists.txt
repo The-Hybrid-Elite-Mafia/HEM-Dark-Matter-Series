@@ -77,9 +77,14 @@ endif()
 
 # Faceplate model + interaction (no graphics code) and drawing.
 file(GLOB DM_UI_LAYOUTS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/layouts/*.cpp)
-add_library(dm_ui STATIC src/ui/PanelModel.cpp src/ui/PanelController.cpp src/ui/Faceplates.cpp src/ui/PanelView.cpp ${DM_UI_LAYOUTS})
+# Faceplate model, interaction, layouts and engine bindings: no graphics, unit-tested on any machine.
+add_library(dm_ui_core STATIC src/ui/PanelModel.cpp src/ui/PanelController.cpp src/ui/Faceplates.cpp ${DM_UI_LAYOUTS})
+target_include_directories(dm_ui_core PUBLIC include)
+target_link_libraries(dm_ui_core PUBLIC dm_build_flags dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker)
+# Faceplate drawing on the Hybrid Core OpenGL renderer.
+add_library(dm_ui STATIC src/ui/PanelView.cpp)
 target_include_directories(dm_ui PUBLIC include)
-target_link_libraries(dm_ui PUBLIC dm_build_flags dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker hc_ui)
+target_link_libraries(dm_ui PUBLIC dm_ui_core hc_ui)
 
 add_executable(dm_faceplate_snapshot tools/faceplate_snapshot/main.cpp)
 target_link_libraries(dm_faceplate_snapshot PRIVATE dm_ui)
@@ -88,6 +93,6 @@ add_custom_command(TARGET dm_faceplate_snapshot POST_BUILD
 
 # ---- Tests ---------------------------------------------------------------------------------------------
 enable_testing()
-add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp)
-target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker)
+add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp tests/faceplate_tests.cpp)
+target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker dm_ui_core)
 add_test(NAME dm_tests COMMAND dm_tests)
