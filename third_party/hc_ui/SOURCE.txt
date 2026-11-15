@@ -1,0 +1,3 @@
+bcf8693 CI: manual ASIO build here (private repo has no Actions minutes); GPLv3 ASIO SDK option, published as a pre-release
+Vendored from The-Hybrid-Elite-Mafia/HybridCore ui/ (same author, GPLv3). Files unchanged.
+Changed: Gl.hpp / Gl.cpp gained a non-Windows (Mesa EGL) branch for headless snapshots on Linux developer machines. Windows code paths unchanged.

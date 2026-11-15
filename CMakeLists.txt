@@ -56,6 +56,35 @@ add_library(dm_chainbreaker STATIC src/chainbreaker/Chainbreaker108.cpp)
 target_include_directories(dm_chainbreaker PUBLIC include)
 target_link_libraries(dm_chainbreaker PUBLIC dm_build_flags)
 
+# ---- Faceplates (Phase 2) ------------------------------------------------------------------------------
+# Reused Hybrid Core renderer (third_party/hc_ui, same author, GPLv3).
+set(HC_UI_SRC third_party/hc_ui/src/StbImpl.cpp third_party/hc_ui/src/Image.cpp third_party/hc_ui/src/Faceplate.cpp
+    third_party/hc_ui/src/Parts.cpp third_party/hc_ui/src/FontAtlas.cpp third_party/hc_ui/src/Gl.cpp
+    third_party/hc_ui/src/Renderer.cpp)
+if(WIN32)
+    list(APPEND HC_UI_SRC third_party/hc_ui/src/GlWindow.cpp)
+endif()
+add_library(hc_ui STATIC ${HC_UI_SRC})
+target_include_directories(hc_ui PUBLIC third_party/hc_ui/include)
+target_include_directories(hc_ui SYSTEM PUBLIC third_party/hc_ui/external/stb)
+target_compile_features(hc_ui PUBLIC cxx_std_23)
+if(WIN32)
+    target_compile_definitions(hc_ui PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(hc_ui PUBLIC opengl32 user32 gdi32 shell32)
+else()
+    target_link_libraries(hc_ui PUBLIC /usr/lib/x86_64-linux-gnu/libGL.so.1 /usr/lib/x86_64-linux-gnu/libEGL.so.1)
+endif()
+
+# Faceplate model + interaction (no graphics code) and drawing.
+add_library(dm_ui STATIC src/ui/PanelModel.cpp src/ui/PanelController.cpp src/ui/Faceplates.cpp src/ui/PanelView.cpp)
+target_include_directories(dm_ui PUBLIC include)
+target_link_libraries(dm_ui PUBLIC dm_build_flags dm_phantom_vox hc_ui)
+
+add_executable(dm_faceplate_snapshot tools/faceplate_snapshot/main.cpp)
+target_link_libraries(dm_faceplate_snapshot PRIVATE dm_ui)
+add_custom_command(TARGET dm_faceplate_snapshot POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:dm_faceplate_snapshot>/assets)
+
 # ---- Tests ---------------------------------------------------------------------------------------------
 enable_testing()
 add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp)
