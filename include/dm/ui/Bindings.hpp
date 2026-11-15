@@ -66,6 +66,16 @@ public:
     [[nodiscard]] bool modified() const override { return e_.params().snapshot() != baseline_; }
     bool undo() override { Snap s{}; if (!history_.undo(s)) return false; e_.params().restore(s); return true; }
     bool redo() override { Snap s{}; if (!history_.redo(s)) return false; e_.params().restore(s); return true; }
+    // Optional one-shot actions (quick-load slots); the last one fired stays lit.
+    using ActionFn = std::function<void(E&, int)>;
+    void setAction(ActionFn fn) { action_ = std::move(fn); }
+    void action(int id) override {
+        if (!action_) return;
+        action_(e_, id);
+        lastAction_ = id;
+        history_.commit(e_.params().snapshot());
+    }
+    [[nodiscard]] bool actionLit(int id) const override { return id == lastAction_; }
 
 private:
     struct User { std::string name; Snap values; };
@@ -74,6 +84,8 @@ private:
     MeterFn meter_;
     FeedFn feed_;
     std::vector<User> user_;
+    ActionFn action_;
+    int lastAction_ = -1;
     Snap baseline_{};
     History<N> history_{};
     int current_ = 0;

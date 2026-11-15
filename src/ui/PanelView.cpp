@@ -88,7 +88,7 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
                 glass.push_back(w.screen);
             }
         }
-        if (w.kind == Kind::Display) glass.push_back(w.box);
+        if (w.kind == Kind::Display && w.showParam < 0) glass.push_back(w.box);   // switchable displays draw their own glass
     }
     // recessed wells in the frame: preset strip, top buttons, input / output capsules
     wells.push_back({def.preset.x - 6, def.preset.y - 6, def.presetNext.r() - def.preset.x + 12, def.preset.h + 12});
@@ -235,7 +235,7 @@ void PanelView::draw(Renderer& r, PanelBinding& b, const PanelController& c) {
     for (std::size_t i = 0; i < def_.widgets.size(); ++i) {
         const Hit h = c.active().t != Hit::T::None ? c.active() : c.hover();
         const bool hot = h.w == static_cast<int>(i) && h.t != Hit::T::None;
-        drawWidget(r, b, def_.widgets[i], hot);
+        if (isShown(def_.widgets[i], b)) drawWidget(r, b, def_.widgets[i], hot);
     }
     drawTopBar(r, b, c);
     drawBottomBar(r, b, c);
@@ -303,6 +303,7 @@ void PanelView::drawWidget(Renderer& r, PanelBinding& b, const Widget& w, bool h
                w.size < 1.0f ? kTextDim : kText, Align::Center, TextFx::Shadowed, w.box.w);
         break;
     case Kind::Handle: drawHandle(r, b, w, hot); break;
+    case Kind::Pad: drawPad(r, b, w, hot); break;
     }
 }
 
@@ -470,8 +471,9 @@ void PanelView::drawRange(Renderer& r, PanelBinding& b, const Widget& w, bool ho
 
 void PanelView::drawButton(Renderer& r, PanelBinding& b, const Widget& w, bool hot) {
     const Rgba c = accentColour(w.accent);
-    const float v = b.value(w.param);
-    const bool lit = w.choice >= 0 ? static_cast<int>(std::lround(v)) == w.choice : v >= 0.5f;
+    const float v = w.param >= 0 ? b.value(w.param) : 0.0f;
+    const bool lit = w.param < 0 ? b.actionLit(w.source)
+                   : w.choice >= 0 ? static_cast<int>(std::lround(v)) == w.choice : v >= 0.5f;
     if (w.icon == Icon::Power) {   // round key with a lit ring and power glyph
         const float cx = w.box.cx(), cy = w.box.cy(), kr = w.box.w * 0.42f, rr = w.box.w * 0.20f;
         r.sprite(Sprite::KnobShadow, {cx - kr * 1.25f + kr * 0.1f, cy - kr * 1.25f + kr * 0.18f, kr * 2.5f, kr * 2.5f});
@@ -662,6 +664,17 @@ void PanelView::drawIcon(Renderer& r, Icon icon, float cx, float cy, float s, Rg
 void PanelView::drawSelector(Renderer& r, PanelBinding& b, const Widget& w, bool hot) {
     const auto& d = b.desc(w.param);
     const Rgba c = accentColour(w.accent);
+    if (w.size < 1.0f) {   // header-style slot selector: < NAME >
+        const float cy = w.box.cy();
+        const Rgba ac = hot ? c : kText.withAlpha(0.7f);
+        const float lx[3] = {w.box.x + 40, w.box.x + 18, w.box.x + 40}, ly[3] = {cy - 20, cy, cy + 20};
+        r.polyline(lx, ly, 3, 5, ac, Blend::Over, hot);
+        const float rx[3] = {w.box.r() - 40, w.box.r() - 18, w.box.r() - 40};
+        r.polyline(rx, ly, 3, 5, ac, Blend::Over, hot);
+        r.text(TextStyle::Tab, formatValue(d, b.value(w.param)), w.box.cx(), cy + 18, c, Align::Center, TextFx::NeonCrisp, w.box.w - 120);
+        if (!w.prefix.empty()) r.text(TextStyle::Caption, w.prefix, w.box.cx(), w.box.b() + 22, kTextDim, Align::Center);
+        return;
+    }
     const bool on = w.param2 < 0 || b.value(w.param2) >= 0.5f;
     const int cur = static_cast<int>(std::lround(b.value(w.param)));
     const float cx = w.box.cx();
@@ -762,6 +775,10 @@ void PanelView::drawMeter(Renderer& r, PanelBinding& b, const Widget& w) {
 void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
     const Rgba c = accentColour(w.accent);
     const Rect bx = R(w.box);
+    if (w.showParam >= 0) {   // glass for a display that comes and goes with its slot
+        r.fillRound(bx, 16, rgb8(0x2E3238), Blend::Over);
+        r.fillRound(bx.inset(3), 14, rgb8(0x06090D), Blend::Over);
+    }
     if (w.display == DisplayKind::Panel) return;   // plain glass window; its widgets draw themselves
     if (w.display == DisplayKind::BandMeters) {   // plain glass backdrop with a divider
         r.fillRound({bx.cx() - 1.5f, bx.y + 20, 3, bx.h - 40}, 1.5f, kTextDim.withAlpha(0.25f), Blend::Over);
@@ -784,26 +801,32 @@ void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
         float xs[K], ys[K], cxs[K], cys[K];
         const float top = bx.y + 30, bot = bx.bottom() - 50;
         auto specY = [&](float db) { return bot - (bot - top) * std::clamp((db + 84.0f) / 84.0f, 0.0f, 1.0f); };
-        auto curveY = [&](float db) { return (top + bot) * 0.5f - (bot - top) * 0.5f * std::clamp(db / 12.0f, -1.0f, 1.0f); };
+        const float range = curveRange(w);
+        auto curveY = [&](float db) { return (top + bot) * 0.5f - (bot - top) * 0.5f * std::clamp(db / range, -1.0f, 1.0f); };
         for (int i = 0; i < K; ++i) {
             const float x = bx.x + bx.w * static_cast<float>(i) / (K - 1);
             xs[i] = cxs[i] = x;
             ys[i] = specY(feed_[static_cast<std::size_t>(i)]);
             cys[i] = curveY(feed_[static_cast<std::size_t>(K + i)]);
         }
-        for (int i = 0; i + 1 < K; ++i) {   // filled spectrum
+        bool hasSpectrum = false;
+        for (int i = 0; i < K; ++i) hasSpectrum = hasSpectrum || feed_[static_cast<std::size_t>(i)] > -130.0f;
+        for (int i = 0; hasSpectrum && i + 1 < K; ++i) {   // filled spectrum
             const float qx[4] = {xs[i], xs[i + 1], xs[i + 1], xs[i]};
             const float qy[4] = {ys[i], ys[i + 1], bot, bot};
             const Rgba qc[4] = {c.withAlpha(0.35f), c.withAlpha(0.35f), c.withAlpha(0.02f), c.withAlpha(0.02f)};
             r.colorQuad(qx, qy, qc, Blend::Over);
         }
-        r.polyline(xs, ys, K, 3, c.withAlpha(0.8f), Blend::Over, true);
+        if (hasSpectrum) r.polyline(xs, ys, K, 3, c.withAlpha(0.8f), Blend::Over, true);
         r.polyline(cxs, cys, K, 10, kOrange.withAlpha(0.25f), Blend::Add, true);
         r.polyline(cxs, cys, K, 4, kAmber, Blend::Over, true);
         // labels: dB scale and frequency marks
-        r.text(TextStyle::Caption, "+12 dB", bx.x + 18, top + 8, kTextDim, Align::Left);
+        char rangeTxt[2][16];
+        std::snprintf(rangeTxt[0], 16, "+%.0f dB", static_cast<double>(range));
+        std::snprintf(rangeTxt[1], 16, "-%.0f dB", static_cast<double>(range));
+        r.text(TextStyle::Caption, rangeTxt[0], bx.x + 18, top + 8, kTextDim, Align::Left);
         r.text(TextStyle::Caption, "0 dB", bx.x + 18, (top + bot) * 0.5f + 8, kTextDim, Align::Left);
-        r.text(TextStyle::Caption, "-12 dB", bx.x + 18, bot - 14, kTextDim, Align::Left);
+        r.text(TextStyle::Caption, rangeTxt[1], bx.x + 18, bot - 14, kTextDim, Align::Left);
         const float freqs[3] = {250.0f, 1000.0f, 10000.0f};
         const char* names[3] = {"250 Hz", "1 kHz", "10 kHz"};
         for (int i = 0; i < 3; ++i) {
@@ -1010,6 +1033,36 @@ void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
         axisText("1 s", x1, bx.bottom() - 16, Align::Right);
         axisText("WET RETURN", bx.cx(), bx.bottom() - 16, Align::Center);
     }
+    if (w.display == DisplayKind::Grain) {
+        // grain train: each grain drawn at its pitch (wave cycles scale with the PITCH ratio), mirrored
+        // when REVERSE is on, spread across the stereo field by WIDE; brightness = live grain level
+        feed_.assign(4, 0.0f);
+        b.feed(DisplayKind::Grain, w.source, feed_);
+        const float ratio = std::pow(2.0f, feed_[0] / 12.0f);
+        const bool rev = feed_[1] >= 0.5f;
+        const float wide = std::clamp(feed_[2] / 100.0f, 0.0f, 1.0f);
+        const float energy = std::clamp((feed_[3] + 60.0f) / 60.0f, 0.15f, 1.0f);
+        const float x0 = bx.x + 30, x1 = bx.right() - 30;
+        const float gw = (x1 - x0) / 5.0f;
+        for (int g = 0; g < 5; ++g) {
+            const float off = (g % 2 ? -1.0f : 1.0f) * wide * bx.h * 0.18f;
+            const float cy = bx.cy() + off;
+            constexpr int K = 48;
+            float xs[K], ys[K];
+            for (int i = 0; i < K; ++i) {
+                const float t = static_cast<float>(i) / (K - 1);
+                const float env = std::sin(kPi * t);
+                const float ph = (rev ? 1.0f - t : t) * 3.0f * ratio * 2.0f * kPi;
+                xs[i] = x0 + gw * static_cast<float>(g) + gw * t;
+                ys[i] = cy - std::sin(ph) * env * bx.h * 0.22f;
+            }
+            r.polyline(xs, ys, K, 8, c.withAlpha(0.2f * energy), Blend::Add, true);
+            r.polyline(xs, ys, K, 3, c.withAlpha(energy), Blend::Over, true);
+        }
+        char buf[48];
+        std::snprintf(buf, sizeof buf, "PITCH %+.0f st%s", static_cast<double>(feed_[0]), rev ? "  REVERSE" : "");
+        r.text(TextStyle::Caption, buf, bx.cx(), bx.y + 36, kText, Align::Center);
+    }
     if (w.display == DisplayKind::NoteGrid) {
         // 12 pitch-class cells: brightness = how sure the key detector is of that note; outlined = in the
         // scale it settled on; line under it: the detected key
@@ -1040,7 +1093,7 @@ void PanelView::drawHandle(Renderer& r, PanelBinding& b, const Widget& w, bool h
     const Rgba c = accentColour(w.accent);
     std::vector<float> hz(1, 1000.0f);
     b.feed(DisplayKind::Handles, w.source, hz);
-    const float x = curveX(w.box, hz[0]), y = curveY(w.box, b.value(w.param2));
+    const float x = curveX(w.box, hz[0]), y = curveY(w.box, b.value(w.param2), curveRange(w));
     const float rr = hot ? 17.0f : 13.0f;
     r.glow({x - rr, y - rr, 2 * rr, 2 * rr}, rr, 16, c.withAlpha(hot ? 0.55f : 0.35f), true);
     r.fillRound({x - rr, y - rr, 2 * rr, 2 * rr}, rr, rgb8(0x0A0C10), Blend::Over);
@@ -1055,6 +1108,30 @@ void PanelView::drawHandle(Renderer& r, PanelBinding& b, const Widget& w, bool h
     }
 }
 
+void PanelView::drawPad(Renderer& r, PanelBinding& b, const Widget& w, bool hot) {
+    // X = stutter RATE, Y = GATE; live repeat rate printed in the corner
+    const Rgba c = accentColour(w.accent);
+    const Rect bx = R(w.box);
+    r.fillRound(bx, 14, rgb8(0x050A0E), Blend::Over);
+    for (int i = 1; i < 8; ++i) {
+        const float x = bx.x + bx.w * static_cast<float>(i) / 8.0f, y = bx.y + bx.h * static_cast<float>(i) / 8.0f;
+        r.fillRound({x - 0.75f, bx.y + 6, 1.5f, bx.h - 12}, 0.5f, c.withAlpha(i == 4 ? 0.35f : 0.10f), Blend::Over);
+        r.fillRound({bx.x + 6, y - 0.75f, bx.w - 12, 1.5f}, 0.5f, c.withAlpha(i == 4 ? 0.35f : 0.10f), Blend::Over);
+    }
+    const float nx = toNorm(b.desc(w.param), b.value(w.param)), ny = toNorm(b.desc(w.param2), b.value(w.param2));
+    const float px = bx.x + bx.w * nx, py = bx.y + bx.h * (1.0f - ny);
+    r.fillRound({px - 1, bx.y + 6, 2, bx.h - 12}, 1, c.withAlpha(0.6f), Blend::Over, true);
+    r.fillRound({bx.x + 6, py - 1, bx.w - 12, 2}, 1, c.withAlpha(0.6f), Blend::Over, true);
+    const float rr = hot ? 24.0f : 20.0f;
+    r.glow({px - rr, py - rr, 2 * rr, 2 * rr}, rr, 26, c.withAlpha(0.55f), true);
+    r.fillRound({px - rr, py - rr, 2 * rr, 2 * rr}, rr, c, Blend::Over, true);
+    r.text(TextStyle::Caption, "RATE >", bx.right() - 16, bx.bottom() - 16, kTextDim, Align::Right);
+    r.text(TextStyle::Caption, "GATE ^", bx.x + 16, bx.y + 34, kTextDim, Align::Left);
+    char buf[48];
+    std::snprintf(buf, sizeof buf, "%.1f Hz  GATE %.0f%%", static_cast<double>(b.meter(w.source)), static_cast<double>(b.value(w.param2)));
+    r.text(TextStyle::Caption, buf, bx.right() - 16, bx.y + 34, kText, Align::Right);
+}
+
 void PanelView::drawTopBar(Renderer& r, PanelBinding& b, const PanelController& c) {
     // crown + title
     const float cx0 = 330, cy0 = 122;
@@ -1062,13 +1139,14 @@ void PanelView::drawTopBar(Renderer& r, PanelBinding& b, const PanelController& 
     const float ys[8] = {cy0 + 34, cy0 - 30, cy0 - 2, cy0 - 46, cy0 - 2, cy0 - 30, cy0 + 34, cy0 + 34};
     r.polyline(xs, ys, 8, 14, kAmber.withAlpha(0.22f), Blend::Add, true);
     r.polyline(xs, ys, 8, 6, kAmber, Blend::Over, true);
-    if (def_.w >= 3000.0f) {
+    if (def_.w >= 3000.0f && !def_.twoLineTitle) {
         r.text(TextStyle::Heading, "HYBRID ELITE MAFIA", 420, 148, kAmber, Align::Left, TextFx::NeonCrisp);
         const float tw = r.textWidth(TextStyle::Heading, "HYBRID ELITE MAFIA ");
         r.text(TextStyle::Heading, "// " + def_.name, 420 + tw, 148, rgb8(0xFFA65A), Align::Left, TextFx::NeonCrisp, def_.preset.x - 50 - (420 + tw));
     } else {   // compact plate: brand line over the plug-in name
-        r.text(TextStyle::Title, "HYBRID ELITE MAFIA", 420, 108, kAmber, Align::Left, TextFx::NeonCrisp, def_.preset.x - 470);
-        r.text(TextStyle::Heading, def_.name, 420, 182, rgb8(0xFFA65A), Align::Left, TextFx::NeonCrisp, def_.preset.x - 470);
+        const float right = std::min(def_.preset.x, def_.undo.x) - 50;
+        r.text(TextStyle::Title, "HYBRID ELITE MAFIA", 420, 108, kAmber, Align::Left, TextFx::NeonCrisp, right - 420);
+        r.text(TextStyle::Heading, def_.name, 420, 182, rgb8(0xFFA65A), Align::Left, TextFx::NeonCrisp, right - 420);
     }
     // square machined key with a thin rim
     auto key = [&](const Box& bx, Hit::T t, Rgba rim, bool lit) {

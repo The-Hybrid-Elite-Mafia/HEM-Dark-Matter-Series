@@ -55,7 +55,8 @@ enum class DisplayKind : unsigned char {
 
 // Handle: a dot on an Analyzer curve. Drag left / right = param (band frequency move), up / down =
 // param2 (band gain). box = the display it lives in; source = band index for the Handles feed.
-enum class Kind : unsigned char { Knob, Fader, Range, Button, Selector, Readout, Meter, Display, Bay, Label, Trim, Handle };
+// Pad: 2-D control, param = x (left -> right), param2 = y (bottom -> top).
+enum class Kind : unsigned char { Knob, Fader, Range, Button, Selector, Readout, Meter, Display, Bay, Label, Trim, Handle, Pad };
 
 struct Widget {
     Kind   kind = Kind::Label;
@@ -75,12 +76,15 @@ struct Widget {
     bool   fromTop = false;     // Meter: gain-reduction style (hangs from the top)
     float  lo = -60, hi = 0;    // Meter range (dB) / Display range
     Box    screen{};            // Bay: recessed glass screen inside the bay (w = 0: none)
+    int    showParam = -1;      // >= 0: only shown (and clickable) while round(value(showParam)) == showValue
+    int    showValue = 0;
     float  titleBase = 100;     // Bay: title baseline below the bay top
 };
 
 struct PanelDef {
     std::string name;          // "HEM PHANTOM VOX"
     float w = kPlateW, h = kPlateH;   // plate size in design units (split plug-ins are smaller)
+    bool twoLineTitle = false;        // brand line over the plug-in name (crowded top bars)
     std::string footer = "~ HYBRID ELITE MAFIA ~";
     std::vector<Widget> widgets;
     // global chassis areas
@@ -111,6 +115,9 @@ public:
     virtual void loadPreset(int i) = 0;
     virtual void savePreset() = 0;                       // "+": stores the current settings as a new user preset
     [[nodiscard]] virtual bool modified() const = 0;
+    // One-shot actions that are not parameters (e.g. Chainbreaker's quick-load chain slots).
+    virtual void action(int) {}
+    [[nodiscard]] virtual bool actionLit(int) const { return false; }
     virtual bool undo() = 0;
     virtual bool redo() = 0;
 };
@@ -128,7 +135,10 @@ struct Track { float a, b; };
 [[nodiscard]] float rangeHz(const Widget& w, float x) noexcept;
 // Handle dot geometry inside its display (gain axis = +/- 12 dB; frequency axis = log 20 Hz .. 22 kHz).
 [[nodiscard]] float curveX(const Box& display, float hz) noexcept;
-[[nodiscard]] float curveY(const Box& display, float db) noexcept;
+[[nodiscard]] float curveY(const Box& display, float db, float rangeDb = 12.0f) noexcept;
+[[nodiscard]] float curveRange(const Widget& w) noexcept;   // a display's / handle's +/- dB span (hi, default 12)
+// Visibility (Widget::showParam).
+[[nodiscard]] bool isShown(const Widget& w, const PanelBinding& b);
 
 // ---- Layout checks (used by tests and by the snapshot tool) -----------------------------------------
 struct LayoutIssue { std::string what; };

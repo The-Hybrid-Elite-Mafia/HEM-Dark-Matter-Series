@@ -178,6 +178,11 @@ int main(int argc, char** argv) {
     static auto bDm = bindDarkMatter(dm4);
     bDm->loadPreset(0);
     jobs.push_back({"HEM_DARK_MATTER_4D", [&](const std::function<void()>& t) { feedShell(dm4, t); }, [&]() -> PanelBinding& { return *bDm; }, darkMatterPanel(), tempoHidden(static_cast<int>(dm::d4::Tempo))});
+    static dm::cb::Chainbreaker108 chain;
+    chain.prepare(48000, 512);
+    static auto bChain = bindChainbreaker(chain);
+    bChain->loadPreset(0);
+    jobs.push_back({"HEM_CHAINBREAKER_108", [&](const std::function<void()>& t) { feedShell(chain, t); }, [&]() -> PanelBinding& { return *bChain; }, chainbreakerPanel(), tempoHidden(static_cast<int>(dm::cb::Tempo))});
     jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [](const std::function<void()>&) {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
 
     int failures = 0;

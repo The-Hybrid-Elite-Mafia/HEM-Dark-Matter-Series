@@ -66,9 +66,13 @@ float rangeHz(const Widget& w, float x) noexcept {
 float curveX(const Box& d, float hz) noexcept {
     return d.x + d.w * std::log(std::min(std::max(hz, 20.0f), 22000.0f) / 20.0f) / std::log(1100.0f);
 }
-float curveY(const Box& d, float db) noexcept {
+float curveY(const Box& d, float db, float rangeDb) noexcept {
     const float top = d.y + 30, bot = d.b() - 50;
-    return (top + bot) * 0.5f - (bot - top) * 0.5f * std::min(std::max(db / 12.0f, -1.0f), 1.0f);
+    return (top + bot) * 0.5f - (bot - top) * 0.5f * std::min(std::max(db / rangeDb, -1.0f), 1.0f);
+}
+float curveRange(const Widget& w) noexcept { return w.hi > 0.5f ? w.hi : 12.0f; }
+bool isShown(const Widget& w, const PanelBinding& b) {
+    return w.showParam < 0 || static_cast<int>(std::lround(b.value(w.showParam))) == w.showValue;
 }
 
 // ---- layout checks ----------------------------------------------------------------------------------
@@ -84,19 +88,21 @@ std::vector<LayoutIssue> checkLayout(const PanelDef& def, const PanelBinding& b,
             if (w.kind != Kind::Label && w.kind != Kind::Display) continue;
         }
         mark(w.param);
-        if (w.kind == Kind::Range || w.kind == Kind::Selector || w.kind == Kind::Handle) mark(w.param2);
+        if (w.kind == Kind::Range || w.kind == Kind::Selector || w.kind == Kind::Handle || w.kind == Kind::Pad) mark(w.param2);
         if (!w.box.inside(plate)) out.push_back({"outside the plate: " + w.label});
     }
     for (std::size_t i = 0; i < bound.size(); ++i)
         if (!bound[i]) out.push_back({"no control on the faceplate for '" + std::string(b.desc(static_cast<int>(i)).id) + "'"});
     // Interactive controls must not overlap each other.
-    auto interactive = [](Kind k) { return k == Kind::Knob || k == Kind::Fader || k == Kind::Range || k == Kind::Button || k == Kind::Readout || k == Kind::Trim; };
+    auto interactive = [](Kind k) { return k == Kind::Knob || k == Kind::Fader || k == Kind::Range || k == Kind::Button || k == Kind::Readout || k == Kind::Trim || k == Kind::Pad; };
+    // two widgets shown for different values of the same parameter are never on screen together
+    auto exclusive = [](const Widget& a, const Widget& c) { return a.showParam >= 0 && a.showParam == c.showParam && a.showValue != c.showValue; };
     for (std::size_t i = 0; i < def.widgets.size(); ++i)
         for (std::size_t j = i + 1; j < def.widgets.size(); ++j) {
             const auto& a = def.widgets[i];
             const auto& c = def.widgets[j];
             const bool keys = (a.icon == Icon::KeyWhite || a.icon == Icon::KeyBlack) && (c.icon == Icon::KeyWhite || c.icon == Icon::KeyBlack);
-            if (interactive(a.kind) && interactive(c.kind) && !keys && a.box.overlaps(c.box))
+            if (interactive(a.kind) && interactive(c.kind) && !keys && !exclusive(a, c) && a.box.overlaps(c.box))
                 out.push_back({"controls overlap: '" + a.label + "' and '" + c.label + "'"});
         }
     return out;

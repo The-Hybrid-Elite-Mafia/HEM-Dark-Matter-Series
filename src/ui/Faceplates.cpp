@@ -175,6 +175,38 @@ std::unique_ptr<PanelBinding> bindDarkMatter(dm::d4::DarkMatter4D& e) {
     return std::make_unique<EngineBinding<DarkMatter4D>>(e, darkMatterPresets(), meter, feed);
 }
 
+std::unique_ptr<PanelBinding> bindChainbreaker(dm::cb::Chainbreaker108& e) {
+    using namespace dm::cb;
+    auto meter = [](Chainbreaker108& v, int s) -> float {
+        switch (s) {
+        case CbClipL: return v.clipPercent(0);
+        case CbClipM: return v.clipPercent(1);
+        case CbClipH: return v.clipPercent(2);
+        case CbStutHz: return v.stutterRateHz();
+        default: return shellMeter(v, s);
+        }
+    };
+    auto feed = [](Chainbreaker108& v, DisplayKind k, int src, std::vector<float>& out) {
+        const auto& p = v.params();
+        if (k == DisplayKind::Analyzer) {   // no spectrum tap on this engine: curve only
+            const std::size_t K = out.size() / 2;
+            for (std::size_t i = 0; i < K; ++i) {
+                const float f0 = 20.0f * std::pow(1100.0f, static_cast<float>(i) / static_cast<float>(K));
+                const float f1 = 20.0f * std::pow(1100.0f, static_cast<float>(i + 1) / static_cast<float>(K));
+                out[i] = -140.0f;
+                out[K + i] = v.spectroCurveDb(std::sqrt(f0 * f1));
+            }
+        } else if (k == DisplayKind::Handles && !out.empty()) {
+            out[0] = p.get(Eq1F + 3 * static_cast<std::size_t>(std::min(std::max(src, 0), 3)));
+        } else if (k == DisplayKind::Grain && out.size() >= 4) {
+            out[0] = p.get(GrainPitch); out[1] = p.get(GrainReverse); out[2] = p.get(Wide); out[3] = shellMeter(v, SrOut);
+        }
+    };
+    auto b = std::make_unique<EngineBinding<Chainbreaker108>>(e, chainbreakerPresets(), meter, feed);
+    b->setAction([](Chainbreaker108& v, int i) { v.loadChain(static_cast<std::size_t>(i)); });
+    return b;
+}
+
 std::vector<int> phantomVoxHidden() { return {dm::pv::AutoGainOn, dm::pv::Tempo}; }
 
 std::unique_ptr<PanelBinding> bindPhantomVox(dm::pv::PhantomVox& e) {

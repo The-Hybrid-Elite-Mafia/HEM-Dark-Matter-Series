@@ -50,7 +50,7 @@ void PanelController::handlePos(const Widget& w, float& x, float& y) const {
     std::vector<float> hz(1, 1000.0f);
     b_.feed(DisplayKind::Handles, w.source, hz);
     x = curveX(w.box, hz[0]);
-    y = curveY(w.box, b_.value(w.param2));
+    y = curveY(w.box, b_.value(w.param2), curveRange(w));
 }
 
 Hit PanelController::hitTest(float x, float y) const {
@@ -73,6 +73,7 @@ Hit PanelController::hitTest(float x, float y) const {
     for (int i = static_cast<int>(def_.widgets.size()) - 1; i >= 0; --i) {
         const Widget& w = def_.widgets[static_cast<std::size_t>(i)];
         if (w.kind == Kind::Bay || w.kind == Kind::Label || w.kind == Kind::Meter || w.kind == Kind::Display) continue;
+        if (!isShown(w, b_)) continue;
         if (w.kind == Kind::Handle) {
             float hx = 0, hy = 0;
             handlePos(w, hx, hy);
@@ -122,6 +123,13 @@ void PanelController::setFromPosition(const Widget& w, int param, float x, float
         else v = std::max(v, b_.value(w.param));
     }
     b_.setValue(param, v);
+}
+
+void PanelController::padSet(const Widget& w, float x, float y) {
+    const float nx = std::min(std::max((x - w.box.x) / std::max(w.box.w, 1.0f), 0.0f), 1.0f);
+    const float ny = std::min(std::max(1.0f - (y - w.box.y) / std::max(w.box.h, 1.0f), 0.0f), 1.0f);
+    b_.setValue(w.param, fromNorm(b_.desc(w.param), nx));
+    b_.setValue(w.param2, fromNorm(b_.desc(w.param2), ny));
 }
 
 void PanelController::mouseDown(float x, float y, bool doubleClick, bool fine) {
@@ -182,6 +190,15 @@ void PanelController::mouseDown(float x, float y, bool doubleClick, bool fine) {
     }
     case Hit::T::Widget: {
         const Widget& w = def_.widgets[static_cast<std::size_t>(h.w)];
+        if (w.kind == Kind::Button && w.param < 0) { if (w.source >= 0) b_.action(w.source); return; }
+        if (w.kind == Kind::Pad) {
+            editParam_ = w.param;
+            b_.beginEdit(w.param);
+            b_.beginEdit(w.param2);
+            if (doubleClick) { b_.setValue(w.param, b_.desc(w.param).def); b_.setValue(w.param2, b_.desc(w.param2).def); }
+            else padSet(w, x, y);
+            return;
+        }
         if (w.kind == Kind::Button) {
             b_.beginEdit(w.param);
             if (w.choice >= 0) b_.setValue(w.param, static_cast<float>(w.choice));
@@ -214,13 +231,14 @@ void PanelController::mouseMove(float x, float y, bool fine) {
     lastX_ = x; lastY_ = y;
     if (active_.t == Hit::T::Widget || active_.t == Hit::T::RangeLo || active_.t == Hit::T::RangeHi) {
         const Widget& w = def_.widgets[static_cast<std::size_t>(active_.w)];
+        if (w.kind == Kind::Pad) { padSet(w, x, y); return; }
         if (w.kind == Kind::Handle) {
             // across: band frequency move over the display width; up / down: gain over its height
             const float k = fine ? kFine : 1.0f;
             nudge(w.param, dx / std::max(w.box.w * 0.5f, 1.0f) * k);
-            const float span = std::max((w.box.h - 80.0f) * 0.5f, 1.0f);   // +/-12 dB over half the curve area
+            const float span = std::max((w.box.h - 80.0f) * 0.5f, 1.0f);   // the display's dB range over half its curve area
             const auto& g = b_.desc(w.param2);
-            b_.setValue(w.param2, std::min(std::max(b_.value(w.param2) + dy / span * 12.0f * k, g.min), g.max));
+            b_.setValue(w.param2, std::min(std::max(b_.value(w.param2) + dy / span * curveRange(w) * k, g.min), g.max));
             return;
         }
         if (w.kind == Kind::Fader || w.kind == Kind::Range) { setFromPosition(w, editParam_, x, y); return; }
@@ -238,7 +256,7 @@ void PanelController::mouseMove(float x, float y, bool fine) {
 void PanelController::mouseUp(float, float) {
     if (active_.t == Hit::T::Widget && active_.w >= 0) {
         const Widget& w = def_.widgets[static_cast<std::size_t>(active_.w)];
-        if (w.kind == Kind::Handle) b_.endEdit(w.param2);
+        if (w.kind == Kind::Handle || w.kind == Kind::Pad) b_.endEdit(w.param2);
     }
     if (editParam_ >= 0) b_.endEdit(editParam_);
     editParam_ = -1;

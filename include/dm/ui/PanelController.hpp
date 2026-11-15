@@ -52,6 +52,7 @@ public:
 private:
     void nudge(int param, float normDelta);
     void setFromPosition(const Widget& w, int param, float x, float y);
+    void padSet(const Widget& w, float x, float y);
 
     const PanelDef& def_;
     PanelBinding& b_;
