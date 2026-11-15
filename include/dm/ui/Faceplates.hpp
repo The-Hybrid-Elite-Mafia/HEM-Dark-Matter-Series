@@ -1,7 +1,13 @@
 #pragma once
 // HEM Dark Matter Series - one call per plug-in: its faceplate layout plus the binding that feeds it.
 #include "dm/phantom_vox/PhantomVox.hpp"
+#include "dm/apex/ApexCore.hpp"
+#include "dm/chainbreaker/Chainbreaker108.hpp"
+#include "dm/darkmatter/DarkMatter4D.hpp"
+#include "dm/ironlock/IronLock.hpp"
+#include "dm/rider/OutlawRider.hpp"
 #include "dm/syndicate/SyndicateRack.hpp"
+#include "dm/ui/Feeds.hpp"
 #include "dm/ui/SyndicateFeeds.hpp"
 #include "dm/ui/Bindings.hpp"
 #include "dm/ui/PanelModel.hpp"
@@ -21,5 +27,11 @@ enum PvFeed : int { PvInL, PvInR, PvOutL, PvOutR, PvGr, PvDs, PvRevIn, PvRevDuck
 template <class M> [[nodiscard]] std::unique_ptr<PanelBinding> bindSplit(dm::sr::SplitPlugin<M>& e);
 // Engines built on EngineShell keep AUTO GAIN (on by default) off the plate, like Phantom Vox.
 [[nodiscard]] std::vector<int> shellHidden();
+[[nodiscard]] std::unique_ptr<PanelBinding> bindApex(dm::ax::ApexCore& e);
+[[nodiscard]] std::unique_ptr<PanelBinding> bindIronLock(dm::il::IronLock& e);
+[[nodiscard]] std::unique_ptr<PanelBinding> bindRider(dm::rd::OutlawRider& e);
+[[nodiscard]] std::unique_ptr<PanelBinding> bindDarkMatter(dm::d4::DarkMatter4D& e);
+[[nodiscard]] std::unique_ptr<PanelBinding> bindChainbreaker(dm::cb::Chainbreaker108& e);
+[[nodiscard]] std::vector<int> tempoHidden(int tempoParam);   // AUTO GAIN + host tempo
 
 } // namespace dm::ui

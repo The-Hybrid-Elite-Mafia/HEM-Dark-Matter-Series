@@ -347,6 +347,8 @@ void PanelView::drawKnob(Renderer& r, PanelBinding& b, const Widget& w, bool hot
     }
     r.sprite(Sprite::KnobLight, {cx - bodyR, cy - bodyR, 2 * bodyR, 2 * bodyR}, {1, 1, 1, 0.8f});
     if (hot) r.glow({cx - R * 0.9f, cy - R * 0.9f, R * 1.8f, R * 1.8f}, R * 0.9f, 20, c.withAlpha(0.22f), true);
+    if (w.size >= 2.0f)   // hero dial: live value in the middle of the cap
+        r.text(TextStyle::Display, formatValue(d, b.value(w.param)), cx, cy + 34, kAmber, Align::Center, TextFx::Neon);
     if (w.size >= 0.6f) {
         const std::string text = hot ? formatValue(d, b.value(w.param)) : w.label;
         r.text(TextStyle::Title, text, cx, cy + R0 * 1.17f + 48, hot ? c : kText, Align::Center, hot ? TextFx::NeonCrisp : TextFx::Shadowed);
@@ -763,6 +765,74 @@ void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
         }
         r.text(TextStyle::Label, w.label, bx.x + 18, bx.bottom() - 14, c, Align::Left, TextFx::NeonCrisp);
     }
+    auto axisText = [&](const char* t, float x, float y, Align al) { r.text(TextStyle::Caption, t, x, y, kTextDim, al); };
+    if (w.display == DisplayKind::Transfer) {
+        // output level vs input level, -60 .. 0 dBFS both ways; dashed 1:1 line for reference
+        constexpr int K = 64;
+        feed_.assign(K, 0.0f);
+        b.feed(DisplayKind::Transfer, w.source, feed_);
+        const float x0 = bx.x + 30, x1 = bx.right() - 30, y0 = bx.y + 30, y1 = bx.bottom() - 30;
+        auto px = [&](float db) { return x0 + (x1 - x0) * (db + 60.0f) / 60.0f; };
+        auto py = [&](float db) { return y1 - (y1 - y0) * std::clamp((db + 60.0f) / 60.0f, 0.0f, 1.0f); };
+        for (int i = 0; i < 12; ++i) {
+            const float t0 = static_cast<float>(2 * i) / 24.0f, t1 = static_cast<float>(2 * i + 1) / 24.0f;
+            const float lx[2] = {x0 + (x1 - x0) * t0, x0 + (x1 - x0) * t1}, ly[2] = {y1 - (y1 - y0) * t0, y1 - (y1 - y0) * t1};
+            r.polyline(lx, ly, 2, 2, kTextDim.withAlpha(0.5f), Blend::Over);
+        }
+        float xs[K], ys[K];
+        for (int i = 0; i < K; ++i) {
+            const float in = -60.0f + 60.0f * static_cast<float>(i) / (K - 1);
+            xs[i] = px(in); ys[i] = py(feed_[static_cast<std::size_t>(i)]);
+        }
+        r.polyline(xs, ys, K, 10, c.withAlpha(0.25f), Blend::Add, true);
+        r.polyline(xs, ys, K, 4, c, Blend::Over, true);
+        axisText("IN", x1, y1 + 24, Align::Right);
+        axisText("OUT", x0 + 4, y0 + 4, Align::Left);
+    } else if (w.display == DisplayKind::Envelope) {
+        // two panels: ATTACK (gain falls onto the hit) and RELEASE (gain recovers), real time constants
+        feed_.assign(2, 10.0f);
+        b.feed(DisplayKind::Envelope, w.source, feed_);
+        const float half = bx.w * 0.5f;
+        for (int k = 0; k < 2; ++k) {
+            const float tau = std::max(feed_[static_cast<std::size_t>(k)], 0.01f);
+            const float span = tau * 5.0f;
+            const float x0 = bx.x + half * k + 30, x1 = bx.x + half * (k + 1) - 30, y0 = bx.y + 40, y1 = bx.bottom() - 70;
+            float xs[48], ys[48];
+            for (int i = 0; i < 48; ++i) {
+                const float t = span * static_cast<float>(i) / 47.0f;
+                const float g = k == 0 ? std::exp(-t / tau) : 1.0f - std::exp(-t / tau);
+                xs[i] = x0 + (x1 - x0) * static_cast<float>(i) / 47.0f;
+                ys[i] = y1 - (y1 - y0) * g;
+            }
+            r.polyline(xs, ys, 48, 10, c.withAlpha(0.25f), Blend::Add, true);
+            r.polyline(xs, ys, 48, 4, c, Blend::Over, true);
+            char buf[32];
+            std::snprintf(buf, sizeof buf, tau < 10.0f ? "%s %.1f ms" : "%s %.0f ms", k == 0 ? "ATK" : "REL", static_cast<double>(tau));
+            r.text(TextStyle::Caption, buf, (x0 + x1) * 0.5f, bx.bottom() - 26, kText, Align::Center);
+        }
+        r.fillRound({bx.cx() - 1, bx.y + 20, 2, bx.h - 40}, 1, kTextDim.withAlpha(0.3f), Blend::Over);
+    } else if (w.display == DisplayKind::Tilt) {
+        // where the colour harmonics go: low band below its split, high band above its split
+        feed_.assign(4, 0.0f);
+        b.feed(DisplayKind::Tilt, w.source, feed_);
+        const float lowHz = feed_[0], highHz = feed_[1], lo = feed_[2] / 100.0f, hi = feed_[3] / 100.0f;
+        const float y1 = bx.bottom() - 60, y0 = bx.y + 40;
+        constexpr int K = 96;
+        float xs[K], ys[K];
+        for (int i = 0; i < K; ++i) {
+            const float f = 20.0f * std::pow(1100.0f, static_cast<float>(i) / (K - 1));
+            const float wl = 1.0f / (1.0f + std::pow(f / lowHz, 4.0f)), wh = 1.0f / (1.0f + std::pow(highHz / f, 4.0f));
+            xs[i] = curveX(w.box, f);
+            ys[i] = y1 - (y1 - y0) * 0.9f * std::clamp(lo * wl + hi * wh, 0.0f, 1.0f);
+        }
+        r.polyline(xs, ys, K, 10, c.withAlpha(0.25f), Blend::Add, true);
+        r.polyline(xs, ys, K, 4, c, Blend::Over, true);
+        const float marks[3] = {100.0f, 1000.0f, 10000.0f};
+        const char* names[3] = {"100", "1k", "10k"};
+        for (int i = 0; i < 3; ++i) axisText(names[i], curveX(w.box, marks[i]), bx.bottom() - 30, Align::Center);
+    }
+    if (w.display == DisplayKind::Transfer || w.display == DisplayKind::Tilt)
+        if (!w.label.empty()) r.text(TextStyle::Caption, w.label, bx.right() - 18, bx.y + 34, c, Align::Right, TextFx::NeonCrisp);
     r.popClip();
 }
 

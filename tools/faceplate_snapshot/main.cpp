@@ -155,6 +155,11 @@ int main(int argc, char** argv) {
     jobs.push_back({"HEM_TONE", [&] { feedShell(sTone); }, [&]() -> PanelBinding& { return *bTone; }, splitPanel(SplitKind::Tone), shellHidden()});
     jobs.push_back({"HEM_MOD", [&] { feedShell(sMod); }, [&]() -> PanelBinding& { return *bMod; }, splitPanel(SplitKind::Mod), shellHidden()});
     jobs.push_back({"HEM_MAX", [&] { feedShell(sMax); }, [&]() -> PanelBinding& { return *bMax; }, splitPanel(SplitKind::Max), shellHidden()});
+    static dm::ax::ApexCore apex;
+    apex.prepare(48000, 512);
+    static auto bApex = bindApex(apex);
+    bApex->loadPreset(0);
+    jobs.push_back({"HEM_APEX_CORE", [&] { feedShell(apex); }, [&]() -> PanelBinding& { return *bApex; }, apexPanel(), shellHidden()});
     jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [] {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
 
     int failures = 0;

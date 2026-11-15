@@ -100,6 +100,28 @@ template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemTone&);
 template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemMod&);
 template std::unique_ptr<PanelBinding> bindSplit(dm::sr::HemMax&);
 
+std::vector<int> tempoHidden(int tempoParam) { return {static_cast<int>(dm::G_AutoGain), tempoParam}; }
+
+std::unique_ptr<PanelBinding> bindApex(dm::ax::ApexCore& e) {
+    auto meter = [](dm::ax::ApexCore& v, int s) -> float {
+        if (s == AxGr) return -std::fabs(v.grDb());
+        if (s == AxWidth) return v.widthPercent();
+        return shellMeter(v, s);
+    };
+    auto feed = [](dm::ax::ApexCore& v, DisplayKind k, int, std::vector<float>& out) {
+        if (k == DisplayKind::Transfer) {
+            const std::size_t K = out.size();
+            for (std::size_t i = 0; i < K; ++i) out[i] = v.transferDb(-60.0f + 60.0f * static_cast<float>(i) / static_cast<float>(K - 1));
+        } else if (k == DisplayKind::Envelope && out.size() >= 2) {
+            out[0] = v.attackMs(); out[1] = v.releaseMs();
+        } else if (k == DisplayKind::Tilt && out.size() >= 4) {
+            out[0] = dm::assumed::ax::kColorLowHz; out[1] = dm::assumed::ax::kColorHighHz;
+            out[2] = v.params().get(dm::ax::ColorLow); out[3] = v.params().get(dm::ax::ColorHigh);
+        }
+    };
+    return std::make_unique<EngineBinding<dm::ax::ApexCore>>(e, dm::ax::apexPresets(), meter, feed);
+}
+
 std::vector<int> phantomVoxHidden() { return {dm::pv::AutoGainOn, dm::pv::Tempo}; }
 
 std::unique_ptr<PanelBinding> bindPhantomVox(dm::pv::PhantomVox& e) {
