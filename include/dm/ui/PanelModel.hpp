@@ -30,7 +30,7 @@ inline Box circleBox(float cx, float cy, float radius) { return {cx - radius, cy
 inline constexpr float kPlateW = 3840.0f, kPlateH = 2160.0f;
 
 enum class Accent : unsigned char { Cyan, Orange, Pink, Purple, Gold };
-enum class Icon : unsigned char { None, Wave, Ring, Atom, Tube, TapeReel, VuMeter, Keys, Max, Grid, Power };
+enum class Icon : unsigned char { None, Wave, Ring, Atom, Tube, TubeXL, TapeReel, VuMeter, Keys, Max, Grid, Power, Bolt, Tv, Tunnel, Crosshair };
 
 // Displays: each kind reads its own live feed from the binding.
 enum class DisplayKind : unsigned char {
@@ -49,9 +49,13 @@ enum class DisplayKind : unsigned char {
     ShapeCurve,      // ducking shape curve
     TransientCurve,  // live transient envelope
     BandMeters,      // 3 vertical band meters (clip / maximize)
+    Handles,         // feed: out[0] = live centre Hz of the band behind a curve handle
+    Panel,           // plain glass window (no drawing of its own; holds other widgets)
 };
 
-enum class Kind : unsigned char { Knob, Fader, Range, Button, Selector, Readout, Meter, Display, Bay, Label, Trim };
+// Handle: a dot on an Analyzer curve. Drag left / right = param (band frequency move), up / down =
+// param2 (band gain). box = the display it lives in; source = band index for the Handles feed.
+enum class Kind : unsigned char { Knob, Fader, Range, Button, Selector, Readout, Meter, Display, Bay, Label, Trim, Handle };
 
 struct Widget {
     Kind   kind = Kind::Label;
@@ -70,10 +74,13 @@ struct Widget {
     bool   vertical = true;     // Fader / Range orientation
     bool   fromTop = false;     // Meter: gain-reduction style (hangs from the top)
     float  lo = -60, hi = 0;    // Meter range (dB) / Display range
+    Box    screen{};            // Bay: recessed glass screen inside the bay (w = 0: none)
+    float  titleBase = 100;     // Bay: title baseline below the bay top
 };
 
 struct PanelDef {
     std::string name;          // "HEM PHANTOM VOX"
+    float w = kPlateW, h = kPlateH;   // plate size in design units (split plug-ins are smaller)
     std::string footer = "~ HYBRID ELITE MAFIA ~";
     std::vector<Widget> widgets;
     // global chassis areas
@@ -98,6 +105,8 @@ public:
     virtual void feed(DisplayKind kind, int source, std::vector<float>& out) const = 0;
     // Presets / history
     [[nodiscard]] virtual std::vector<std::string> presetNames() const = 0;
+    // Category of each preset (same order as presetNames; empty = flat list).
+    [[nodiscard]] virtual std::vector<std::string> presetCategories() const { return {}; }
     [[nodiscard]] virtual int currentPreset() const = 0;
     virtual void loadPreset(int i) = 0;
     virtual void savePreset() = 0;                       // "+": stores the current settings as a new user preset
@@ -112,6 +121,15 @@ public:
 [[nodiscard]] float fromNorm(const ParamDesc& d, float n) noexcept;
 [[nodiscard]] std::string formatValue(const ParamDesc& d, float v);
 
+// Fader / Range track ends (design units) shared by the view and the controller.
+struct Track { float a, b; };
+[[nodiscard]] Track faderTrack(const Widget& w) noexcept;      // vertical: a = top y; horizontal: a = left x
+[[nodiscard]] float rangeX(const Widget& w, float hz) noexcept;  // log 20 Hz .. 22 kHz along the Range track
+[[nodiscard]] float rangeHz(const Widget& w, float x) noexcept;
+// Handle dot geometry inside its display (gain axis = +/- 12 dB; frequency axis = log 20 Hz .. 22 kHz).
+[[nodiscard]] float curveX(const Box& display, float hz) noexcept;
+[[nodiscard]] float curveY(const Box& display, float db) noexcept;
+
 // ---- Layout checks (used by tests and by the snapshot tool) -----------------------------------------
 struct LayoutIssue { std::string what; };
 // Every param in [firstOwn, paramCount) must be bound by some widget unless listed in `notOnPlate`;
@@ -120,5 +138,13 @@ struct LayoutIssue { std::string what; };
 
 // ---- Faceplates -----------------------------------------------------------------------------------
 [[nodiscard]] PanelDef phantomVoxPanel();
+[[nodiscard]] PanelDef syndicatePanel();
+enum class SplitKind : unsigned char { Sat, Comp, Transient, Tone, Mod, Max };
+[[nodiscard]] PanelDef splitPanel(SplitKind k);
+[[nodiscard]] PanelDef apexPanel();
+[[nodiscard]] PanelDef ironLockPanel();
+[[nodiscard]] PanelDef riderPanel();
+[[nodiscard]] PanelDef darkMatterPanel();
+[[nodiscard]] PanelDef chainbreakerPanel();
 
 } // namespace dm::ui

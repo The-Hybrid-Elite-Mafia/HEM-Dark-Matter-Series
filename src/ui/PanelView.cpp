@@ -67,6 +67,7 @@ Rgba accentColour(Accent a) noexcept {
 //  Static plate (CPU)
 // =====================================================================================================
 hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
+    const float kPlateW = def.w, kPlateH = def.h;   // this plate's own size
     hc::ui::Image img;
     img.width = static_cast<std::uint32_t>(std::lround(kPlateW * ppu));
     img.height = static_cast<std::uint32_t>(std::lround(kPlateH * ppu));
@@ -74,24 +75,24 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
     // Heavy machined frame -> raised inner lip -> recessed brushed field that carries the bays.
     const Box frame{8, 8, kPlateW - 16, kPlateH - 16};
     const Box lip{70, 40, kPlateW - 140, kPlateH - 80};
-    const Box field{118, 222, kPlateW - 236, 1752};
+    const Box field{118, 222, kPlateW - 236, kPlateH - 408};
     std::vector<Box> bays, plates, glass, wells;
     for (const auto& w : def.widgets) {
         if (w.kind == Kind::Bay) {
-            if (w.label.empty()) bays.push_back(w.box);
+            if (w.screen.w <= 0) bays.push_back(w.box);
             else {
-                // titled mode bay: raised brushed-metal plate carrying a recessed glass screen
+                // mode bay: raised brushed-metal plate carrying a recessed glass screen
                 plates.push_back(w.box);
-                glass.push_back({w.box.x + w.box.w * 0.20f, w.box.y + 22, w.box.w * 0.60f, w.box.h - 44});
+                glass.push_back(w.screen);
             }
         }
         if (w.kind == Kind::Display) glass.push_back(w.box);
     }
     // recessed wells in the frame: preset strip, top buttons, input / output capsules
     wells.push_back({def.preset.x - 6, def.preset.y - 6, def.presetNext.r() - def.preset.x + 12, def.preset.h + 12});
-    wells.push_back({def.inputTrim.x - 30, 1998, def.inputMeter.r() - def.inputTrim.x + 60, 114});
-    wells.push_back({def.outputMeter.x - 200, 1998, def.outputTrim.r() - def.outputMeter.x + 230, 114});
-    const std::array<std::array<float, 2>, 4> screws{{{194, 119}, {kPlateW - 194, 119}, {194, 2040}, {kPlateW - 194, 2040}}};
+    wells.push_back({def.inputTrim.x - 30, kPlateH - 162, def.inputMeter.r() - def.inputTrim.x + 60, 114});
+    wells.push_back({def.outputMeter.x - 200, kPlateH - 162, def.outputTrim.r() - def.outputMeter.x + 230, 114});
+    const std::array<std::array<float, 2>, 4> screws{{{194, 119}, {kPlateW - 194, 119}, {194, kPlateH - 120}, {kPlateW - 194, kPlateH - 120}}};
 
     auto grad = [](float (*sd)(float, float, const Box&, float), float x, float y, const Box& b, float rad, float& nx, float& ny) {
         const float e = 0.75f;
@@ -227,9 +228,9 @@ void PanelView::drawChassisLights(Renderer& r) {
     // Light strip set into the outer frame: electric cyan down the left, molten orange down the
     // right, blending across the top and bottom runs. Drawn as smooth shaded strips + corner arcs.
     const float in = 26, rad = 100;
-    const float L = in, T = in, Rr = kPlateW - in, B = kPlateH - in;
+    const float L = in, T = in, Rr = def_.w - in, B = def_.h - in;
     auto mixc = [](Rgba a, Rgba b, float t) { return Rgba{a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1.0f}; };
-    auto colourAt = [&](float x) { return mixc(kCyan, kOrange, std::clamp((x - 1100.0f) / 1640.0f, 0.0f, 1.0f)); };
+    auto colourAt = [&](float x) { return mixc(kCyan, kOrange, std::clamp((x - def_.w * 0.29f) / (def_.w * 0.42f), 0.0f, 1.0f)); };
     // one straight run from (x0,y0) to (x1,y1) (axis-aligned), core + soft falloff both sides
     auto run = [&](float x0, float y0, float x1, float y1) {
         const bool horiz = std::fabs(y1 - y0) < 0.5f;
@@ -280,22 +281,26 @@ void PanelView::drawWidget(Renderer& r, PanelBinding& b, const Widget& w, bool h
     case Kind::Meter: drawMeter(r, b, w); break;
     case Kind::Display: drawDisplay(r, b, w); break;
     case Kind::Label:
-        r.text(TextStyle::Label, w.label, w.box.cx(), w.box.cy() + 10, kText, Align::Center, TextFx::Shadowed);
+        r.text(w.size > 1.0f ? TextStyle::Title : TextStyle::Label, w.label, w.box.cx(), w.box.cy() + 12,
+               w.size < 1.0f ? kTextDim : kText, Align::Center, TextFx::Shadowed, w.box.w);
         break;
+    case Kind::Handle: drawHandle(r, b, w, hot); break;
     }
 }
 
 void PanelView::drawBay(Renderer& r, const Widget& w) {
     const Rgba c = accentColour(w.accent);
     // short accent light-pipe centred on the top edge of the panel
-    if (w.label.empty()) {   // control deck panels carry a short accent light-pipe on the top edge
+    if (w.screen.w <= 0 && w.label.empty()) {   // control deck panels carry a short accent light-pipe on the top edge
         const float lw = std::min(w.box.w * 0.5f, 440.0f);
         const Rect pipe{w.box.cx() - lw * 0.5f, w.box.y - 2, lw, 4};
         r.glow(pipe, 2.0f, 14, c.withAlpha(0.25f), true);
         r.fillRound(pipe, 2.0f, c.withAlpha(0.75f), Blend::Over, true);
     }
-    if (!w.label.empty())
-        r.text(TextStyle::Tab, w.label, w.box.cx(), w.box.y + 100, c, Align::Center, TextFx::NeonCrisp, w.box.w * 0.56f);
+    if (!w.label.empty()) {
+        const float maxW = w.screen.w > 0 && w.titleBase > w.screen.y - w.box.y ? w.screen.w - 40 : w.box.w - 300;
+        r.text(TextStyle::Tab, w.label, w.box.cx(), w.box.y + w.titleBase, c, Align::Center, TextFx::NeonCrisp, maxW);
+    }
 }
 
 void PanelView::drawKnob(Renderer& r, PanelBinding& b, const Widget& w, bool hot) {
@@ -342,7 +347,7 @@ void PanelView::drawKnob(Renderer& r, PanelBinding& b, const Widget& w, bool hot
     }
     r.sprite(Sprite::KnobLight, {cx - bodyR, cy - bodyR, 2 * bodyR, 2 * bodyR}, {1, 1, 1, 0.8f});
     if (hot) r.glow({cx - R * 0.9f, cy - R * 0.9f, R * 1.8f, R * 1.8f}, R * 0.9f, 20, c.withAlpha(0.22f), true);
-    if (big) {
+    if (w.size >= 0.6f) {
         const std::string text = hot ? formatValue(d, b.value(w.param)) : w.label;
         r.text(TextStyle::Title, text, cx, cy + R0 * 1.17f + 48, hot ? c : kText, Align::Center, hot ? TextFx::NeonCrisp : TextFx::Shadowed);
     }
@@ -521,7 +526,7 @@ void PanelView::drawIcon(Renderer& r, Icon icon, float cx, float cy, float s, Rg
         r.fillRound({cx - s * 0.13f, cy - s * 0.13f, s * 0.26f, s * 0.26f}, s * 0.13f, c, Blend::Over, lit);
         break;
     }
-    case Icon::Tube: case Icon::Max: {
+    case Icon::Tube: case Icon::TubeXL: {
         for (int k = 0; k < 3; ++k) {
             const float bx = cx - s * 0.55f + static_cast<float>(k) * s * 0.55f;
             float xs[5] = {bx - s * 0.18f, bx - s * 0.18f, bx + s * 0.18f, bx + s * 0.18f, bx - s * 0.18f};
@@ -531,7 +536,74 @@ void PanelView::drawIcon(Renderer& r, Icon icon, float cx, float cy, float s, Rg
         float bxs[5] = {cx - s * 0.85f, cx - s * 0.85f, cx + s * 0.85f, cx + s * 0.85f, cx - s * 0.85f};
         float bys[5] = {cy + s * 0.1f, cy + s * 0.45f, cy + s * 0.45f, cy + s * 0.1f, cy + s * 0.1f};
         line(bxs, bys, 5);
-        if (icon == Icon::Tube) r.text(TextStyle::Title, "XL", cx, cy + s * 0.95f, c, Align::Center, lit ? TextFx::Neon : TextFx::Plain);
+        if (icon == Icon::TubeXL) r.text(TextStyle::Title, "XL", cx, cy + s * 0.95f, c, Align::Center, lit ? TextFx::Neon : TextFx::Plain);
+        break;
+    }
+    case Icon::TapeReel: {   // two reels on a deck
+        auto circle = [&](float x, float y, float rad, int n) {
+            float xs[49], ys[49];
+            for (int i = 0; i <= n; ++i) { const float a = 2 * kPi * static_cast<float>(i) / n; xs[i] = x + std::cos(a) * rad; ys[i] = y + std::sin(a) * rad; }
+            line(xs, ys, n + 1);
+        };
+        for (float side : {-1.0f, 1.0f}) {
+            const float x = cx + side * s * 0.42f, y = cy - s * 0.18f;
+            circle(x, y, s * 0.34f, 48);
+            circle(x, y, s * 0.09f, 16);
+            for (int k = 0; k < 3; ++k) {
+                const float a = 2 * kPi * static_cast<float>(k) / 3.0f;
+                const float lx[2] = {x + std::cos(a) * s * 0.12f, x + std::cos(a) * s * 0.28f}, ly[2] = {y + std::sin(a) * s * 0.12f, y + std::sin(a) * s * 0.28f};
+                line(lx, ly, 2);
+            }
+        }
+        const float bx[5] = {cx - s * 0.85f, cx + s * 0.85f, cx + s * 0.85f, cx - s * 0.85f, cx - s * 0.85f};
+        const float by[5] = {cy + s * 0.28f, cy + s * 0.28f, cy + s * 0.62f, cy + s * 0.62f, cy + s * 0.28f};
+        line(bx, by, 5);
+        break;
+    }
+    case Icon::VuMeter: {   // meter window with a needle
+        const float bx[5] = {cx - s * 0.8f, cx + s * 0.8f, cx + s * 0.8f, cx - s * 0.8f, cx - s * 0.8f};
+        const float by[5] = {cy - s * 0.6f, cy - s * 0.6f, cy + s * 0.6f, cy + s * 0.6f, cy - s * 0.6f};
+        line(bx, by, 5);
+        float ax[25], ay[25];
+        for (int i = 0; i < 25; ++i) { const float a = -0.35f * kPi + 0.7f * kPi * static_cast<float>(i) / 24.0f; ax[i] = cx + std::sin(a) * s * 0.6f; ay[i] = cy + s * 0.35f - std::cos(a) * s * 0.6f; }
+        line(ax, ay, 25);
+        const float nx[2] = {cx, cx + s * 0.32f}, ny[2] = {cy + s * 0.35f, cy - s * 0.12f};
+        line(nx, ny, 2);
+        r.text(TextStyle::Caption, "VU", cx, cy + s * 0.52f, c, Align::Center, lit ? TextFx::Neon : TextFx::Plain);
+        break;
+    }
+    case Icon::Keys: {   // keyboard: outline, white-key lines, black keys
+        const float bx[5] = {cx - s * 0.9f, cx + s * 0.9f, cx + s * 0.9f, cx - s * 0.9f, cx - s * 0.9f};
+        const float by[5] = {cy - s * 0.45f, cy - s * 0.45f, cy + s * 0.45f, cy + s * 0.45f, cy - s * 0.45f};
+        line(bx, by, 5);
+        for (int k = 1; k < 8; ++k) {
+            const float x = cx - s * 0.9f + s * 1.8f * static_cast<float>(k) / 8.0f;
+            const float lx[2] = {x, x}, ly[2] = {cy - s * 0.05f, cy + s * 0.45f};
+            line(lx, ly, 2);
+        }
+        for (int k : {1, 2, 4, 5, 6}) {
+            const float x = cx - s * 0.9f + s * 1.8f * static_cast<float>(k) / 8.0f;
+            r.fillRound({x - s * 0.07f, cy - s * 0.45f, s * 0.14f, s * 0.42f}, 3, lit ? c : c.withAlpha(0.45f), Blend::Over, lit);
+        }
+        break;
+    }
+    case Icon::Max: {   // rising bars hitting a ceiling line
+        for (int k = 0; k < 5; ++k) {
+            const float x = cx - s * 0.72f + static_cast<float>(k) * s * 0.36f;
+            const float hgt = s * (0.35f + 0.13f * static_cast<float>(k));
+            r.fillRound({x - s * 0.11f, cy + s * 0.5f - std::min(hgt, s * 0.86f), s * 0.22f, std::min(hgt, s * 0.86f)}, 4, lit ? c : c.withAlpha(0.45f), Blend::Over, lit);
+        }
+        const float lx[2] = {cx - s * 0.95f, cx + s * 0.95f}, ly[2] = {cy - s * 0.45f, cy - s * 0.45f};
+        line(lx, ly, 2);
+        break;
+    }
+    case Icon::Grid: {   // 4 x 4 pad grid
+        for (int y = 0; y < 4; ++y)
+            for (int x = 0; x < 4; ++x) {
+                const float px = cx - s * 0.66f + static_cast<float>(x) * s * 0.44f, py = cy - s * 0.66f + static_cast<float>(y) * s * 0.44f;
+                const bool on = (x + y) % 3 == 0;
+                r.fillRound({px - s * 0.16f, py - s * 0.16f, s * 0.32f, s * 0.32f}, 5, on && lit ? c : c.withAlpha(0.3f), Blend::Over, on && lit);
+            }
         break;
     }
     default: break;
@@ -584,7 +656,29 @@ void PanelView::drawMeter(Renderer& r, PanelBinding& b, const Widget& w) {
     float& v = smooth_[s];
     v = raw > v ? raw : v + (raw - v) * 0.2f;
     const Rect bx = R(w.box);
-    if (bx.h > 400) {   // tall slim gain-reduction bar: continuous lit column
+    if (!w.vertical) {   // horizontal bar; centre-out when the range straddles zero (phase / correlation)
+        r.fillRound(bx, bx.h * 0.5f, rgb8(0x010203), Blend::Over);
+        r.sprite(Sprite::InnerShadow, bx);
+        const Rgba c = accentColour(w.accent);
+        const float f = std::clamp((v - w.lo) / (w.hi - w.lo), 0.0f, 1.0f);
+        const bool bip = w.lo < 0.0f && w.hi > 0.0f;
+        const float x0 = bip ? bx.x + bx.w * (-w.lo / (w.hi - w.lo)) : bx.x + 3;
+        const float x1 = bx.x + 3 + (bx.w - 6) * f;
+        const Rect fill{std::min(x0, x1), bx.y + 3, std::fabs(x1 - x0), bx.h - 6};
+        if (fill.w > 1) { r.fillRound(fill, (bx.h - 6) * 0.5f, c, Blend::Over, true); r.glow(fill, 4, 10, c.withAlpha(0.3f), true); }
+        if (bip) r.fillRound({x0 - 1.5f, bx.y - 6, 3, bx.h + 12}, 1.5f, kTextDim, Blend::Over);
+        if (!w.label.empty()) r.text(TextStyle::Caption, w.label, bx.x, bx.y - 14, kTextDim, Align::Left);
+        if (bip) {
+            char a[16], z[16];
+            std::snprintf(a, sizeof a, "%g", static_cast<double>(w.lo));
+            std::snprintf(z, sizeof z, "%+g", static_cast<double>(w.hi));
+            const bool dbUnit = std::fabs(w.hi) > 1.5f;
+            r.text(TextStyle::Caption, std::string(a) + (dbUnit ? " dB" : ""), bx.x, bx.bottom() + 32, kTextDim, Align::Left);
+            r.text(TextStyle::Caption, std::string(z) + (dbUnit ? " dB" : ""), bx.x + bx.w, bx.bottom() + 32, kTextDim, Align::Right);
+        }
+        return;
+    }
+    if (bx.h > 400 && bx.w <= 48) {   // tall slim gain-reduction bar: continuous lit column
         const float tw = 12, tx = bx.cx() - tw * 0.5f;
         r.fillRound({tx, bx.y, tw, bx.h}, tw * 0.5f, rgb8(0x010203), Blend::Over);
         r.sprite(Sprite::InnerShadow, {tx, bx.y, tw, bx.h});
@@ -619,6 +713,7 @@ void PanelView::drawMeter(Renderer& r, PanelBinding& b, const Widget& w) {
 void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
     const Rgba c = accentColour(w.accent);
     const Rect bx = R(w.box);
+    if (w.display == DisplayKind::Panel) return;   // plain glass window; its widgets draw themselves
     if (w.display == DisplayKind::BandMeters) {   // plain glass backdrop with a divider
         r.fillRound({bx.cx() - 1.5f, bx.y + 20, 3, bx.h - 40}, 1.5f, kTextDim.withAlpha(0.25f), Blend::Over);
         return;
@@ -671,6 +766,25 @@ void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
     r.popClip();
 }
 
+void PanelView::drawHandle(Renderer& r, PanelBinding& b, const Widget& w, bool hot) {
+    const Rgba c = accentColour(w.accent);
+    std::vector<float> hz(1, 1000.0f);
+    b.feed(DisplayKind::Handles, w.source, hz);
+    const float x = curveX(w.box, hz[0]), y = curveY(w.box, b.value(w.param2));
+    const float rr = hot ? 17.0f : 13.0f;
+    r.glow({x - rr, y - rr, 2 * rr, 2 * rr}, rr, 16, c.withAlpha(hot ? 0.55f : 0.35f), true);
+    r.fillRound({x - rr, y - rr, 2 * rr, 2 * rr}, rr, rgb8(0x0A0C10), Blend::Over);
+    r.fillRound({x - rr + 4, y - rr + 4, 2 * rr - 8, 2 * rr - 8}, rr - 4, c, Blend::Over, true);
+    if (hot) {
+        char buf[64];
+        const float f = hz[0];
+        if (f >= 1000.0f) std::snprintf(buf, sizeof buf, "%s  %.1f kHz  %+.1f dB", w.label.c_str(), f / 1000.0f, b.value(w.param2));
+        else std::snprintf(buf, sizeof buf, "%s  %.0f Hz  %+.1f dB", w.label.c_str(), f, b.value(w.param2));
+        const float tx = std::clamp(x, w.box.x + 220, w.box.r() - 220);
+        r.text(TextStyle::Caption, buf, tx, std::max(y - 28, w.box.y + 34), c, Align::Center, TextFx::NeonCrisp);
+    }
+}
+
 void PanelView::drawTopBar(Renderer& r, PanelBinding& b, const PanelController& c) {
     // crown + title
     const float cx0 = 330, cy0 = 122;
@@ -678,9 +792,14 @@ void PanelView::drawTopBar(Renderer& r, PanelBinding& b, const PanelController& 
     const float ys[8] = {cy0 + 34, cy0 - 30, cy0 - 2, cy0 - 46, cy0 - 2, cy0 - 30, cy0 + 34, cy0 + 34};
     r.polyline(xs, ys, 8, 14, kAmber.withAlpha(0.22f), Blend::Add, true);
     r.polyline(xs, ys, 8, 6, kAmber, Blend::Over, true);
-    r.text(TextStyle::Heading, "HYBRID ELITE MAFIA", 420, 148, kAmber, Align::Left, TextFx::NeonCrisp);
-    const float tw = r.textWidth(TextStyle::Heading, "HYBRID ELITE MAFIA ");
-    r.text(TextStyle::Heading, "// " + def_.name, 420 + tw, 148, rgb8(0xFFA65A), Align::Left, TextFx::NeonCrisp, def_.preset.x - 50 - (420 + tw));
+    if (def_.w >= 3000.0f) {
+        r.text(TextStyle::Heading, "HYBRID ELITE MAFIA", 420, 148, kAmber, Align::Left, TextFx::NeonCrisp);
+        const float tw = r.textWidth(TextStyle::Heading, "HYBRID ELITE MAFIA ");
+        r.text(TextStyle::Heading, "// " + def_.name, 420 + tw, 148, rgb8(0xFFA65A), Align::Left, TextFx::NeonCrisp, def_.preset.x - 50 - (420 + tw));
+    } else {   // compact plate: brand line over the plug-in name
+        r.text(TextStyle::Title, "HYBRID ELITE MAFIA", 420, 108, kAmber, Align::Left, TextFx::NeonCrisp, def_.preset.x - 470);
+        r.text(TextStyle::Heading, def_.name, 420, 182, rgb8(0xFFA65A), Align::Left, TextFx::NeonCrisp, def_.preset.x - 470);
+    }
     // square machined key with a thin rim
     auto key = [&](const Box& bx, Hit::T t, Rgba rim, bool lit) {
         const bool hot = c.hover().t == t || c.active().t == t;
@@ -769,16 +888,33 @@ void PanelView::drawBottomBar(Renderer& r, PanelBinding& b, const PanelControlle
 
 void PanelView::drawPresetMenu(Renderer& r, PanelBinding& b, const PanelController& c) {
     const Box m = c.menuBox();
-    r.glow(R(m), 20, 30, kOrange.withAlpha(0.35f), true);
-    r.fillRound(R(m), 20, rgb8(0x0A0B0E, 0.97f), Blend::Over);
+    // solid, opaque window: drawn emissive-black too so lights behind it don't bloom through
+    r.sprite(Sprite::DropShadow, {m.x - 20, m.y - 10, m.w + 60, m.h + 70});
+    r.fillRound(R(m), 18, rgb8(0x3A3E46), Blend::Over, true);
+    r.fillRound(R(m).inset(2.5f), 16, rgb8(0x0A0B0E), Blend::Over, true);
+    r.fillRound({m.x + 3, m.y + 3, m.w - 6, 3}, 1.5f, kAmber.withAlpha(0.8f), Blend::Over, true);
     const auto names = b.presetNames();
-    const int n = static_cast<int>(std::min<std::size_t>(names.size(), 18));
-    for (int i = 0; i < n; ++i) {
+    const auto cats = c.categories();
+    const auto rows = c.menuRows();
+    for (int i = 0; i < static_cast<int>(rows.size()); ++i) {
+        const auto& row = rows[static_cast<std::size_t>(i)];
         const Box it = c.menuItem(i);
-        const bool hot = c.hover().t == Hit::T::MenuItem && c.hover().w == i;
-        const bool cur = i == b.currentPreset();
-        if (hot || cur) r.fillRound(R(it), 12, kOrange.withAlpha(cur ? 0.22f : 0.12f), Blend::Over, cur);
-        r.text(TextStyle::Title, names[static_cast<std::size_t>(i)], it.x + 24, it.cy() + 12, cur ? kAmber : kText, Align::Left, TextFx::Shadowed, it.w - 40);
+        const Hit::T t = row.category ? Hit::T::MenuCategory : Hit::T::MenuItem;
+        const bool hot = c.hover().t == t && c.hover().w == row.index;
+        if (row.category) {
+            const bool open = row.index == c.openCategory();
+            if (hot || open) r.fillRound(R(it), 10, kOrange.withAlpha(open ? 0.16f : 0.08f), Blend::Over, open);
+            r.text(TextStyle::Title, cats[static_cast<std::size_t>(row.index)], it.x + 24, it.cy() + 15, open ? kAmber : kTextBright, Align::Left, TextFx::Shadowed, it.w - 100);
+            // arrow: points down when open, left when closed (the mockup's submenu marker)
+            const float ax = it.r() - 40, ay = it.cy();
+            if (open) { const float xs[3] = {ax - 12, ax, ax + 12}, ys[3] = {ay - 6, ay + 6, ay - 6}; r.polyline(xs, ys, 3, 4, kAmber, Blend::Over); }
+            else { const float xs[3] = {ax + 6, ax - 6, ax + 6}, ys[3] = {ay - 12, ay, ay + 12}; r.polyline(xs, ys, 3, 4, kTextDim, Blend::Over); }
+        } else {
+            const bool cur = row.index == b.currentPreset();
+            const float indent = cats.empty() ? 24.0f : 64.0f;
+            if (hot || cur) r.fillRound({it.x + indent - 16, it.y, it.w - indent + 16, it.h}, 10, kCyan.withAlpha(cur ? 0.16f : 0.08f), Blend::Over, cur);
+            r.text(TextStyle::Title, names[static_cast<std::size_t>(row.index)], it.x + indent, it.cy() + 15, cur ? kCyan : kText, Align::Left, TextFx::Shadowed, it.w - indent - 30);
+        }
     }
 }
 

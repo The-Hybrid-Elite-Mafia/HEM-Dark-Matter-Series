@@ -2,6 +2,7 @@
 #include "dm/ui/PanelModel.hpp"
 
 #include "dm/phantom_vox/PhantomVox.hpp"
+#include "dm/ui/LayoutKit.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -48,10 +49,32 @@ std::string formatValue(const ParamDesc& d, float v) {
     return buf;
 }
 
+// ---- shared geometry -------------------------------------------------------------------------------
+Track faderTrack(const Widget& w) noexcept {
+    if (w.kind == Kind::Range || !w.vertical) return {w.box.x + 70, w.box.r() - 70};
+    return {w.box.y + 40, w.box.b() - 40};
+}
+float rangeX(const Widget& w, float hz) noexcept {
+    const Track t = faderTrack(w);
+    return t.a + (t.b - t.a) * std::log(std::min(std::max(hz, 20.0f), 22000.0f) / 20.0f) / std::log(1100.0f);
+}
+float rangeHz(const Widget& w, float x) noexcept {
+    const Track t = faderTrack(w);
+    const float n = std::min(std::max((x - t.a) / std::max(t.b - t.a, 1.0f), 0.0f), 1.0f);
+    return 20.0f * std::pow(1100.0f, n);
+}
+float curveX(const Box& d, float hz) noexcept {
+    return d.x + d.w * std::log(std::min(std::max(hz, 20.0f), 22000.0f) / 20.0f) / std::log(1100.0f);
+}
+float curveY(const Box& d, float db) noexcept {
+    const float top = d.y + 30, bot = d.b() - 50;
+    return (top + bot) * 0.5f - (bot - top) * 0.5f * std::min(std::max(db / 12.0f, -1.0f), 1.0f);
+}
+
 // ---- layout checks ----------------------------------------------------------------------------------
 std::vector<LayoutIssue> checkLayout(const PanelDef& def, const PanelBinding& b, std::vector<int> notOnPlate) {
     std::vector<LayoutIssue> out;
-    const Box plate{0, 0, kPlateW, kPlateH};
+    const Box plate{0, 0, def.w, def.h};
     std::vector<bool> bound(b.paramCount(), false);
     auto mark = [&](int p) { if (p >= 0 && static_cast<std::size_t>(p) < bound.size()) bound[static_cast<std::size_t>(p)] = true; };
     mark(def.bypassParam); mark(def.inputParam); mark(def.outputParam);
@@ -61,7 +84,7 @@ std::vector<LayoutIssue> checkLayout(const PanelDef& def, const PanelBinding& b,
             if (w.kind != Kind::Label && w.kind != Kind::Display) continue;
         }
         mark(w.param);
-        if (w.kind == Kind::Range || w.kind == Kind::Selector) mark(w.param2);
+        if (w.kind == Kind::Range || w.kind == Kind::Selector || w.kind == Kind::Handle) mark(w.param2);
         if (!w.box.inside(plate)) out.push_back({"outside the plate: " + w.label});
     }
     for (std::size_t i = 0; i < bound.size(); ++i)
@@ -78,67 +101,11 @@ std::vector<LayoutIssue> checkLayout(const PanelDef& def, const PanelBinding& b,
     return out;
 }
 
-// ---- shared chassis (top + bottom bars) ---------------------------------------------------------------
-namespace {
-void chassis(PanelDef& d, std::string name) {
-    d.name = std::move(name);
-    d.title = {270, 58, 1500, 150};
-    d.preset = {1815, 68, 665, 104};
-    d.presetPrev = {2488, 68, 104, 104};
-    d.presetNext = {2600, 68, 104, 104};
-    d.presetSave = {2740, 68, 116, 104};
-    d.undo = {3040, 68, 116, 104};
-    d.redo = {3170, 68, 116, 104};
-    d.bypass = {3338, 64, 240, 112};
-    d.inputTrim = {300, 2010, 200, 90};
-    d.inputMeter = {640, 2034, 560, 42};
-    d.footerBox = {1300, 1995, 1240, 120};
-    d.outputMeter = {2770, 2034, 560, 42};
-    d.outputTrim = {3350, 2010, 200, 90};
-}
-Widget knob(int p, float cx, float cy, float r, Accent a, std::string label, float size = 1.0f) {
-    Widget w; w.kind = Kind::Knob; w.param = p; w.box = circleBox(cx, cy, r); w.accent = a; w.label = std::move(label); w.size = size;
-    return w;
-}
-Widget readout(int p, Box b, std::string prefix, Accent a) {
-    Widget w; w.kind = Kind::Readout; w.param = p; w.box = b; w.prefix = std::move(prefix); w.accent = a; w.label = w.prefix;
-    return w;
-}
-Widget fader(int p, Box b, Accent a, std::string label, bool vertical = true) {
-    Widget w; w.kind = Kind::Fader; w.param = p; w.box = b; w.accent = a; w.label = std::move(label); w.vertical = vertical;
-    return w;
-}
-Widget button(int p, Box b, std::string label, Accent a, int choice = -1, Icon icon = Icon::None) {
-    Widget w; w.kind = Kind::Button; w.param = p; w.box = b; w.label = std::move(label); w.accent = a; w.choice = choice; w.icon = icon;
-    return w;
-}
-Widget meter(int src, Box b, std::string label, Accent a, float lo, float hi, bool fromTop = false) {
-    Widget w; w.kind = Kind::Meter; w.source = src; w.box = b; w.label = std::move(label); w.accent = a; w.lo = lo; w.hi = hi; w.fromTop = fromTop;
-    return w;
-}
-Widget bay(Box b, std::string title, Accent a) {
-    Widget w; w.kind = Kind::Bay; w.box = b; w.label = std::move(title); w.accent = a;
-    return w;
-}
-Widget display(DisplayKind k, int src, Box b, std::string label, Accent a) {
-    Widget w; w.kind = Kind::Display; w.display = k; w.source = src; w.box = b; w.label = std::move(label); w.accent = a;
-    return w;
-}
-// An upper mode bay: bay plate, power button, solo button, mode selector with icon, trim knob.
-void modeBay(PanelDef& d, Box b, std::string title, Accent a, Icon icon, int onP, int soloP, int modeP, int trimP) {
-    d.widgets.push_back(bay(b, title, a));
-    d.widgets.push_back(button(onP, {b.x + 28, b.y + 26, 92, 92}, title + " POWER", a, -1, Icon::Power));
-    d.widgets.push_back(button(soloP, {b.r() - 120, b.y + 26, 92, 92}, "S", a));
-    Widget s; s.kind = Kind::Selector; s.param = modeP; s.param2 = onP; s.box = {b.x + 40, b.y + 135, b.w - 80, 290};
-    s.accent = a; s.icon = icon; s.label = title + " MODE";
-    d.widgets.push_back(s);
-    d.widgets.push_back(knob(trimP, b.r() - 78, b.b() - 62, 46, a, "TRIM", 0.5f));
-}
-} // namespace
 
 // ===================================== HEM PHANTOM VOX ================================================
 // Feed ids used by the Phantom Vox binding.
 PanelDef phantomVoxPanel() {
+    using namespace kit;
     using namespace dm::pv;
     PanelDef d;
     chassis(d, "HEM PHANTOM VOX");
@@ -150,7 +117,7 @@ PanelDef phantomVoxPanel() {
     modeBay(d, b1, "DYNAMICS", Accent::Pink, Icon::Wave, DynOn, DynSolo, DynMode, DynTrim);
     modeBay(d, b2, "TONE", Accent::Cyan, Icon::Ring, ToneOn, ToneSolo, ToneMode, ToneTrim);
     modeBay(d, b3, "SPACE", Accent::Purple, Icon::Atom, SpaceOn, SpaceSolo, SpaceMode, SpaceTrim);
-    modeBay(d, b4, "SFX", Accent::Gold, Icon::Tube, SfxOn, SfxSolo, SfxMode, SfxTrim);
+    modeBay(d, b4, "SFX", Accent::Gold, Icon::TubeXL, SfxOn, SfxSolo, SfxMode, SfxTrim);
 
     // ---- lower 4-column control deck ----
     const float lt = 785, lh = 1170;

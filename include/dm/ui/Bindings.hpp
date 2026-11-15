@@ -40,6 +40,14 @@ public:
         for (const auto& u : user_) n.push_back(u.name);
         return n;
     }
+    [[nodiscard]] std::vector<std::string> presetCategories() const override {
+        std::vector<std::string> c;
+        bool any = false;
+        for (const auto& p : presets_) { c.emplace_back(p.category); any = any || !p.category.empty(); }
+        if (!any) return {};
+        for (std::size_t i = 0; i < user_.size(); ++i) c.emplace_back("User");
+        return c;
+    }
     [[nodiscard]] int currentPreset() const override { return current_; }
     void loadPreset(int i) override {
         if (i < 0) return;

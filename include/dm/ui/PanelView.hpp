@@ -36,6 +36,7 @@ private:
     void drawMeter(hc::ui::Renderer& r, PanelBinding& b, const Widget& w);
     void drawDisplay(hc::ui::Renderer& r, PanelBinding& b, const Widget& w);
     void drawBay(hc::ui::Renderer& r, const Widget& w);
+    void drawHandle(hc::ui::Renderer& r, PanelBinding& b, const Widget& w, bool hot);
     void drawIcon(hc::ui::Renderer& r, Icon icon, float cx, float cy, float size, hc::ui::Rgba c, bool lit);
     void drawPresetMenu(hc::ui::Renderer& r, PanelBinding& b, const PanelController& c);
     void hMeter(hc::ui::Renderer& r, Box box, float dbL, float dbR);

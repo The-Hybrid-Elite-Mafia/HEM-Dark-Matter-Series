@@ -65,6 +65,7 @@ struct Job {
     std::function<PanelBinding&()> binding;
     PanelDef def;
     std::vector<int> hidden;
+    int menuCategory = -1;   // >= 0: draw with the preset browser open on this category
 };
 
 double lumaStdDev(const hc::ui::Image& img) {
@@ -106,7 +107,6 @@ int main(int argc, char** argv) {
         else if (a == "--assets") assets = argv[++i];
     }
     fs::create_directories(out);
-    const int height = width * 9 / 16;
     std::string err;
 
 #if defined(_WIN32)
@@ -131,6 +131,19 @@ int main(int argc, char** argv) {
                          for (std::size_t p = 0; p < l.size(); p += 512) pv.process(l.data() + p, r.data() + p, int(std::min<std::size_t>(512, l.size() - p))); },
                     [&]() -> PanelBinding& { return *pvBind; }, phantomVoxPanel(), phantomVoxHidden()});
 
+    // Shell engines: feed the same voice through the engine's stereo block process.
+    auto feedShell = [](auto& e) {
+        std::vector<float> l, r;
+        vocal(l, r, 48000, 48000 * 3 - 19200);
+        for (std::size_t p = 0; p < l.size(); p += 512) e.process(l.data() + p, r.data() + p, int(std::min<std::size_t>(512, l.size() - p)));
+    };
+    static dm::sr::SyndicateRack rack;
+    rack.prepare(48000, 512);
+    rack.loadPreset(0);
+    auto rackBind = bindSyndicate(rack);
+    jobs.push_back({"HEM_SYNDICATE_RACK", [&] { feedShell(rack); }, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden()});
+    jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [] {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
+
     int failures = 0;
     for (auto& job : jobs) {
         const auto issues = checkLayout(job.def, job.binding(), job.hidden);
@@ -141,19 +154,21 @@ int main(int argc, char** argv) {
         hc::ui::Renderer r;
         if (!r.init(4, &err) || !r.setParts(parts, &err)) { std::printf("FAIL %s renderer: %s\n", job.name.c_str(), err.c_str()); ++failures; continue; }
         hc::ui::Canvas canvas{};
-        canvas.scale = static_cast<float>(width) / kPlateW;
+        const int height = static_cast<int>(std::lround(width * job.def.h / job.def.w));
+        canvas.scale = static_cast<float>(width) / job.def.w;
         canvas.offsetX = 0; canvas.offsetY = 0;
         canvas.pixelW = static_cast<float>(width); canvas.pixelH = static_cast<float>(height);
         hc::ui::FontAtlas font;
         if (!font.bake(*fonts, canvas.scale) || !r.setFont(font, &err)) { std::printf("FAIL font bake\n"); ++failures; continue; }
-        const float ppu = std::min(canvas.scale, 4096.0f / kPlateW);
+        const float ppu = std::min(canvas.scale, 4096.0f / job.def.w);
         if (!r.setPanel(hc::ui::buildMips(hc::ui::premultiply(renderPlate(job.def, ppu))), &err) || !r.setTargetSize(width, height, &err)) {
             std::printf("FAIL %s targets: %s\n", job.name.c_str(), err.c_str()); ++failures; continue;
         }
         r.beginStatic(canvas);
-        r.panel({0, 0, kPlateW, kPlateH});
+        r.panel({0, 0, job.def.w, job.def.h});
         r.endStatic();
         PanelController ctl(job.def, job.binding());
+        if (job.menuCategory >= 0) ctl.openMenu(job.menuCategory);   // preset-browser view
         PanelView view(job.def);
         r.beginFrame(canvas);
         view.draw(r, job.binding(), ctl);

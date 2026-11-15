@@ -8,12 +8,15 @@
 //   Top bar             : undo / redo, preset < > + and the preset menu, BYPASS
 #include "dm/ui/PanelModel.hpp"
 
+#include <string>
+#include <vector>
+
 namespace dm::ui {
 
 struct Hit {
     enum class T : unsigned char {
         None, Widget, Undo, Redo, Preset, PresetPrev, PresetNext, PresetSave, Bypass, InTrim, OutTrim,
-        SelPrev, SelNext, RangeLo, RangeHi, MenuItem
+        SelPrev, SelNext, RangeLo, RangeHi, MenuItem, MenuCategory
     };
     T   t = T::None;
     int w = -1;   // widget index (or menu item)
@@ -32,9 +35,17 @@ public:
     [[nodiscard]] Hit hover() const noexcept { return hover_; }
     [[nodiscard]] Hit active() const noexcept { return active_; }
     [[nodiscard]] bool menuOpen() const noexcept { return menu_; }
-    // Preset menu geometry (shared with the view).
+    // Preset browser. Flat list, or (when the binding gives categories) an accordion: category rows,
+    // the open category's presets listed under it. Rows are shared with the view.
+    struct MenuRow { bool category; int index; };   // category: index into categories(); else preset index
+    [[nodiscard]] std::vector<MenuRow> menuRows() const;
+    [[nodiscard]] std::vector<std::string> categories() const;
+    [[nodiscard]] int openCategory() const noexcept { return openCat_; }
+    void openMenu(int category) { menu_ = true; openCat_ = category; }
     [[nodiscard]] Box menuBox() const;
-    [[nodiscard]] Box menuItem(int i) const;
+    [[nodiscard]] Box menuItem(int row) const;
+    // Live position of a curve handle (design units).
+    void handlePos(const Widget& w, float& x, float& y) const;
 
     [[nodiscard]] Hit hitTest(float x, float y) const;
 
@@ -48,6 +59,7 @@ private:
     int editParam_ = -1;
     float lastY_ = 0, lastX_ = 0, choiceAcc_ = 0;
     bool menu_ = false;
+    int openCat_ = -1;
 };
 
 } // namespace dm::ui

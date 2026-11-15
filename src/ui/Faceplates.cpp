@@ -26,7 +26,45 @@ void spectrumAndCurve(dm::AnalyzerTap& tap, CurveFn curve, std::vector<float>& o
         out[K + i] = curve(std::sqrt(f0 * f1));
     }
 }
+
+// Bottom-bar + column level meters every EngineShell engine has.
+template <class E>
+float shellMeter(const E& e, int s) {
+    const auto& m = e.shellMeters();
+    switch (s) {
+    case SrInL: return db(m.inL.read());
+    case SrInR: return db(m.inR.read());
+    case SrOutL: return db(m.outL.read());
+    case SrOutR: return db(m.outR.read());
+    case SrIn: return db(std::max(m.inL.read(), m.inR.read()));
+    case SrOut: return db(std::max(m.outL.read(), m.outR.read()));
+    case SrLimiter: return -std::fabs(m.limiterDb.read());
+    default: return -120.0f;
+    }
+}
 } // namespace
+
+std::vector<int> shellHidden() { return {static_cast<int>(dm::G_AutoGain)}; }
+
+std::unique_ptr<PanelBinding> bindSyndicate(dm::sr::SyndicateRack& e) {
+    auto meter = [](dm::sr::SyndicateRack& v, int s) -> float {
+        switch (s) {
+        case SrSat: return v.satMeterDb();
+        case SrGr: return -std::fabs(v.grDb());
+        case SrTransient: return v.transientDb();
+        case SrCorr: return v.correlation();
+        case SrBandL: return v.bandActivity(0);
+        case SrBandM: return v.bandActivity(1);
+        case SrBandH: return v.bandActivity(2);
+        default: return shellMeter(v, s);
+        }
+    };
+    auto feed = [](dm::sr::SyndicateRack& v, DisplayKind k, int src, std::vector<float>& out) {
+        if (k == DisplayKind::Analyzer) spectrumAndCurve(v.analyzer(), [&](float hz) { return v.toneCurveDb(hz); }, out);
+        else if (k == DisplayKind::Handles && !out.empty()) out[0] = v.toneBandHz(src);
+    };
+    return std::make_unique<EngineBinding<dm::sr::SyndicateRack>>(e, dm::sr::rackPresets(), meter, feed);
+}
 
 std::vector<int> phantomVoxHidden() { return {dm::pv::AutoGainOn, dm::pv::Tempo}; }
 

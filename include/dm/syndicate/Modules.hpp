@@ -133,6 +133,8 @@ public:
     void reset() noexcept;
     void update(const float* v, const float* old) noexcept;
     void process(float& l, float& r) noexcept;
+    // Centre frequency of band b (0 SUB .. 5 AIR+) after its handle move (UI: handle dot position).
+    [[nodiscard]] static float bandHz(const float* v, int b) noexcept;
     [[nodiscard]] AnalyzerTap& analyzer() noexcept { return analyzer_; }
     // UI curve: combined EQ + filter response at hz for the given parameter slice.
     [[nodiscard]] static float curveDb(const float* v, float hz, float sr) noexcept;

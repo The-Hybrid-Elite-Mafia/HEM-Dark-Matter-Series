@@ -76,9 +76,10 @@ else()
 endif()
 
 # Faceplate model + interaction (no graphics code) and drawing.
-add_library(dm_ui STATIC src/ui/PanelModel.cpp src/ui/PanelController.cpp src/ui/Faceplates.cpp src/ui/PanelView.cpp)
+file(GLOB DM_UI_LAYOUTS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/layouts/*.cpp)
+add_library(dm_ui STATIC src/ui/PanelModel.cpp src/ui/PanelController.cpp src/ui/Faceplates.cpp src/ui/PanelView.cpp ${DM_UI_LAYOUTS})
 target_include_directories(dm_ui PUBLIC include)
-target_link_libraries(dm_ui PUBLIC dm_build_flags dm_phantom_vox hc_ui)
+target_link_libraries(dm_ui PUBLIC dm_build_flags dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker hc_ui)
 
 add_executable(dm_faceplate_snapshot tools/faceplate_snapshot/main.cpp)
 target_link_libraries(dm_faceplate_snapshot PRIVATE dm_ui)

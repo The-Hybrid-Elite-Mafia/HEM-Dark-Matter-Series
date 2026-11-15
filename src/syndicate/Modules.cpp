@@ -205,6 +205,10 @@ void ToneModule::process(float& l, float& r) noexcept {
     }
     analyzer_.push(l, r);
 }
+float ToneModule::bandHz(const float* v, int b) noexcept {
+    const auto& t = a::kToneModeTable[pick(v[Mode], a::kToneModes)].band[std::min(std::max(b, 0), 5)];
+    return clampf(t.hz * std::pow(2.0f, a::kHandleOctaves * v[SubF + static_cast<std::size_t>(std::min(std::max(b, 0), 5))] * 0.01f), 15.0f, 21000.0f);
+}
 float ToneModule::curveDb(const float* v, float hz, float sr) noexcept {
     const auto& m = a::kToneModeTable[pick(v[Mode], a::kToneModes)];
     float db = 0;

@@ -65,6 +65,11 @@ public:
         for (std::size_t i = 0; i < v.size(); ++i) v[i] = params_.get(kTone + i);
         return ToneModule::curveDb(v.data(), hz, sr_);
     }
+    [[nodiscard]] float toneBandHz(int b) const noexcept {
+        std::array<float, ToneModule::kN> v{};
+        for (std::size_t i = 0; i < v.size(); ++i) v[i] = params_.get(kTone + i);
+        return ToneModule::bandHz(v.data(), b);
+    }
 
     // EngineShell hooks
     void prepareCore(float sr);
