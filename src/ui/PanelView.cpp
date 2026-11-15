@@ -75,16 +75,23 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
     const Box frame{8, 8, kPlateW - 16, kPlateH - 16};
     const Box lip{70, 40, kPlateW - 140, kPlateH - 80};
     const Box field{118, 222, kPlateW - 236, 1752};
-    std::vector<Box> bays, glass, wells;
+    std::vector<Box> bays, plates, glass, wells;
     for (const auto& w : def.widgets) {
-        if (w.kind == Kind::Bay) bays.push_back(w.box);
+        if (w.kind == Kind::Bay) {
+            if (w.label.empty()) bays.push_back(w.box);
+            else {
+                // titled mode bay: raised brushed-metal plate carrying a recessed glass screen
+                plates.push_back(w.box);
+                glass.push_back({w.box.x + w.box.w * 0.20f, w.box.y + 22, w.box.w * 0.60f, w.box.h - 44});
+            }
+        }
         if (w.kind == Kind::Display) glass.push_back(w.box);
     }
     // recessed wells in the frame: preset strip, top buttons, input / output capsules
     wells.push_back({def.preset.x - 6, def.preset.y - 6, def.presetNext.r() - def.preset.x + 12, def.preset.h + 12});
     wells.push_back({def.inputTrim.x - 30, 1998, def.inputMeter.r() - def.inputTrim.x + 60, 114});
     wells.push_back({def.outputMeter.x - 200, 1998, def.outputTrim.r() - def.outputMeter.x + 230, 114});
-    const std::array<std::array<float, 2>, 4> screws{{{60, 60}, {kPlateW - 60, 60}, {60, kPlateH - 60}, {kPlateW - 60, kPlateH - 60}}};
+    const std::array<std::array<float, 2>, 4> screws{{{194, 119}, {kPlateW - 194, 119}, {194, 2040}, {kPlateW - 194, 2040}}};
 
     auto grad = [](float (*sd)(float, float, const Box&, float), float x, float y, const Box& b, float rad, float& nx, float& ny) {
         const float e = 0.75f;
@@ -107,11 +114,11 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
                 // outer frame: dark anodised gunmetal, rolled outer edge
                 L = 0.008f + 0.007f * brushed(ux * 0.6f, uy) + 0.005f * (1.0f - uy / kPlateH);
                 grad(sdRound, ux, uy, frame, 120, nx, ny);
-                const float roll = std::clamp(1.0f + dF / 26.0f, 0.0f, 1.0f);
-                L += 0.16f * roll * roll * std::max(0.0f, bevelLight(-nx, -ny)) - 0.004f * roll;
+                const float roll = std::clamp(1.0f + dF / 40.0f, 0.0f, 1.0f);
+                L += 0.24f * roll * roll * std::max(0.0f, bevelLight(-nx, -ny)) + 0.02f * roll;
                 grad(sdRound, ux, uy, lip, 90, nx, ny);
                 const float wall = std::clamp(1.0f - dLip / 10.0f, 0.0f, 1.0f);   // step down onto the lip
-                L += 0.10f * wall * bevelLight(-nx, -ny);
+                L += 0.16f * wall * bevelLight(-nx, -ny);
             } else if (dFld > 0.0f) {
                 // machined top / bottom deck and side rails: brushed steel, horizontal grain
                 L = 0.013f + 0.011f * brushed(ux, uy) + 0.008f * std::exp(-std::pow((uy - 120.0f) / 160.0f, 2.0f));
@@ -141,13 +148,25 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
                     if (d < 0.0f) {
                         // smoked satin panel, lighter at the top, faint vertical brushing
                         const float t = std::clamp((uy - b.y) / b.h, 0.0f, 1.0f);
-                        L = 0.019f - 0.008f * t + 0.004f * brushed(uy * 0.7f, ux * 0.6f);
+                        L = 0.017f - 0.007f * t + 0.009f * brushed(ux, uy);
                         L += 0.005f * std::exp(-std::pow((ux - b.cx()) / (b.w * 0.35f), 2.0f)) * (1.0f - t);
                         grad(sdRound, ux, uy, b, 26, nx, ny);
                         const float rim = std::clamp(1.0f + d / 3.0f, 0.0f, 1.0f);
                         L += 0.07f * rim * std::max(0.0f, bevelLight(-nx, -ny)) + 0.015f * rim;
                     } else if (d < 22.0f) {
                         L *= 0.45f + 0.55f * (d / 22.0f);   // soft contact shadow round each panel
+                    }
+                }
+                for (const Box& b : plates) {
+                    const float d = sdRound(ux, uy, b, 30);
+                    if (d < 0.0f) {
+                        const float t = std::clamp((uy - b.y) / b.h, 0.0f, 1.0f);
+                        L = 0.034f - 0.012f * t + 0.016f * brushed(ux, uy);
+                        grad(sdRound, ux, uy, b, 30, nx, ny);
+                        const float rim = std::clamp(1.0f + d / 7.0f, 0.0f, 1.0f);
+                        L += 0.13f * rim * std::max(0.0f, bevelLight(-nx, -ny)) - 0.012f * rim * std::max(0.0f, bevelLight(nx, ny));
+                    } else if (d < 24.0f) {
+                        L *= 0.40f + 0.60f * (d / 24.0f);
                     }
                 }
                 for (const Box& g : glass) {
@@ -158,8 +177,10 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
                         tB = 1.45f; tG = 1.18f;
                         L *= 0.55f + 0.45f * std::clamp(std::min(uy - g.y, ux - g.x) / 22.0f, 0.0f, 1.0f);
                         if (d > -3.0f) { L += 0.05f; tB = 1.6f; tG = 1.35f; }
-                    } else if (d < 4.0f) {
-                        L = 0.09f;   // bright bezel lip around the glass
+                    } else if (d < 9.0f) {
+                        grad(sdRound, ux, uy, g, 16, nx, ny);   // machined bezel ring round the glass
+                        L = 0.045f + 0.11f * std::max(0.0f, bevelLight(-nx, -ny)) * (1.0f - d / 9.0f) + 0.02f * brushed(ux, uy);
+                        tB = 1.03f; tG = 1.0f;
                     }
                 }
             }
@@ -274,7 +295,7 @@ void PanelView::drawBay(Renderer& r, const Widget& w) {
         r.fillRound(pipe, 2.0f, c.withAlpha(0.75f), Blend::Over, true);
     }
     if (!w.label.empty())
-        r.text(TextStyle::Tab, w.label, w.box.cx(), w.box.y + 92, c, Align::Center, TextFx::NeonCrisp, w.box.w - 320);
+        r.text(TextStyle::Tab, w.label, w.box.cx(), w.box.y + 100, c, Align::Center, TextFx::NeonCrisp, w.box.w * 0.56f);
 }
 
 void PanelView::drawKnob(Renderer& r, PanelBinding& b, const Widget& w, bool hot) {
@@ -293,7 +314,7 @@ void PanelView::drawKnob(Renderer& r, PanelBinding& b, const Widget& w, bool hot
         for (int i = 0; i < ticks; ++i) {
             const float t = static_cast<float>(i) / (ticks - 1);
             const float a = kKnobMin + (kKnobMax - kKnobMin) * t;
-            const float rr = R0 * 1.13f;
+            const float rr = R0 * 1.17f;
             const float x = cx + std::sin(a) * rr, y = cy - std::cos(a) * rr;
             const bool lit = bip ? ((a >= std::min(a0, ang) - 1e-4f) && (a <= std::max(a0, ang) + 1e-4f)) : t <= n + 1e-4f;
             const float sz = R0 * 0.032f;
@@ -301,7 +322,7 @@ void PanelView::drawKnob(Renderer& r, PanelBinding& b, const Widget& w, bool hot
                 r.sprite(Sprite::GlowDot, {x - sz * 4, y - sz * 4, sz * 8, sz * 8}, c.withAlpha(0.55f), Blend::Add, true);
                 r.fillRound({x - sz, y - sz, 2 * sz, 2 * sz}, sz, c, Blend::Over, true);
             } else {
-                r.fillRound({x - sz, y - sz, 2 * sz, 2 * sz}, sz, rgb8(0x454A54), Blend::Over);
+                r.fillRound({x - sz, y - sz, 2 * sz, 2 * sz}, sz, rgb8(0x5A606B), Blend::Over);
             }
         }
     }
@@ -311,16 +332,19 @@ void PanelView::drawKnob(Renderer& r, PanelBinding& b, const Widget& w, bool hot
     r.arc(cx, cy, R - 2, 3, -kPi, kPi, {1, 1, 1, 0.07f}, false);
     const float bodyR = R * 0.93f;
     r.sprite(Sprite::KnobShadow, {cx - bodyR * 1.18f + 0.08f * bodyR, cy - bodyR * 1.18f + 0.14f * bodyR, bodyR * 2.36f, bodyR * 2.36f});
-    r.spriteRotated(Sprite::KnobBody, cx, cy, bodyR * 2.0f, bodyR * 2.0f, ang, {0.34f, 0.35f, 0.37f, 1.0f});
-    const float len = (hc::ui::knob::kIndicatorTo - hc::ui::knob::kIndicatorFrom) * bodyR / hc::ui::knob::kBody * 0.9f;
-    const float mid = bodyR * 0.62f;
-    r.spriteRotated(Sprite::KnobIndicator, cx + std::sin(ang) * mid, cy - std::cos(ang) * mid, len * 0.25f, len, ang,
-                    {1.0f, 1.0f, 1.0f, 1.0f}, Blend::Over, true);
+    r.spriteRotated(Sprite::KnobBody, cx, cy, bodyR * 2.0f, bodyR * 2.0f, ang, {0.66f, 0.67f, 0.70f, 1.0f});
+    {   // short lit tick near the rim, in the knob's accent colour
+        const float r0 = bodyR * 0.52f, r1 = bodyR * 0.80f;
+        const float px[2] = {cx + std::sin(ang) * r0, cx + std::sin(ang) * r1};
+        const float py[2] = {cy - std::cos(ang) * r0, cy - std::cos(ang) * r1};
+        r.polyline(px, py, 2, bodyR * 0.11f, c.withAlpha(0.35f), Blend::Add, true);
+        r.polyline(px, py, 2, bodyR * 0.045f, c, Blend::Over, true);
+    }
     r.sprite(Sprite::KnobLight, {cx - bodyR, cy - bodyR, 2 * bodyR, 2 * bodyR}, {1, 1, 1, 0.8f});
     if (hot) r.glow({cx - R * 0.9f, cy - R * 0.9f, R * 1.8f, R * 1.8f}, R * 0.9f, 20, c.withAlpha(0.22f), true);
     if (big) {
         const std::string text = hot ? formatValue(d, b.value(w.param)) : w.label;
-        r.text(TextStyle::Title, text, cx, cy + R0 * 1.13f + 50, hot ? c : kText, Align::Center, hot ? TextFx::NeonCrisp : TextFx::Shadowed);
+        r.text(TextStyle::Title, text, cx, cy + R0 * 1.17f + 48, hot ? c : kText, Align::Center, hot ? TextFx::NeonCrisp : TextFx::Shadowed);
     }
 }
 
@@ -422,18 +446,23 @@ void PanelView::drawButton(Renderer& r, PanelBinding& b, const Widget& w, bool h
     const Rgba c = accentColour(w.accent);
     const float v = b.value(w.param);
     const bool lit = w.choice >= 0 ? static_cast<int>(std::lround(v)) == w.choice : v >= 0.5f;
-    if (w.icon == Icon::Power) {
-        const float cx = w.box.cx(), cy = w.box.cy(), rr = w.box.w * 0.30f;
+    if (w.icon == Icon::Power) {   // round key with a lit ring and power glyph
+        const float cx = w.box.cx(), cy = w.box.cy(), kr = w.box.w * 0.42f, rr = w.box.w * 0.20f;
+        r.sprite(Sprite::KnobShadow, {cx - kr * 1.25f + kr * 0.1f, cy - kr * 1.25f + kr * 0.18f, kr * 2.5f, kr * 2.5f});
+        if (lit) r.glow({cx - kr, cy - kr, 2 * kr, 2 * kr}, kr, 18, c.withAlpha(0.40f), true);
+        r.fillRound({cx - kr, cy - kr, 2 * kr, 2 * kr}, kr, lit ? c.withAlpha(0.95f) : rgb8(0x3A3E46), Blend::Over, lit);
+        r.fillRound({cx - kr * 0.84f, cy - kr * 0.84f, kr * 1.68f, kr * 1.68f}, kr * 0.84f, rgb8(0x121418), Blend::Over);
+        r.fillRound({cx - kr * 0.7f, cy - kr * 0.8f, kr * 1.4f, kr * 0.7f}, kr * 0.35f, {1, 1, 1, 0.06f}, Blend::Add);
         const Rgba ic = lit ? c : kTextDim.withAlpha(0.6f);
-        r.arc(cx, cy + 2, rr, 7, 0.30f * kPi, 1.70f * kPi, ic, lit);
-        r.fillRound({cx - 3.5f, cy - rr - 4, 7, rr + 2}, 3.5f, ic, Blend::Over, lit);
-        if (lit) r.glow({cx - rr, cy - rr, 2 * rr, 2 * rr}, rr, 18, c.withAlpha(0.35f), true);
+        r.arc(cx, cy + 2, rr, 6, 0.30f * kPi, 1.70f * kPi, ic, lit);
+        r.fillRound({cx - 3, cy - rr - 3, 6, rr + 2}, 3, ic, Blend::Over, lit);
         return;
     }
     if (w.label == "S") {   // small round solo button, ringed like the mockup's corner icons
-        const float cx = w.box.cx(), cy = w.box.cy(), rr = w.box.w * 0.27f;
-        r.fillRound({cx - rr, cy - rr, 2 * rr, 2 * rr}, rr, lit ? c.withAlpha(0.85f) : rgb8(0x0E1013), Blend::Over, lit);
-        r.arc(cx, cy, rr, 2.5f, -kPi, kPi, lit ? c : kTextDim.withAlpha(0.7f), lit);
+        const float cx = w.box.cx(), cy = w.box.cy(), rr = w.box.w * 0.30f;
+        r.sprite(Sprite::KnobShadow, {cx - rr * 1.3f + rr * 0.1f, cy - rr * 1.3f + rr * 0.2f, rr * 2.6f, rr * 2.6f});
+        r.fillRound({cx - rr, cy - rr, 2 * rr, 2 * rr}, rr, rgb8(0x3A3E46), Blend::Over);
+        r.fillRound({cx - rr * 0.84f, cy - rr * 0.84f, rr * 1.68f, rr * 1.68f}, rr * 0.84f, lit ? c.withAlpha(0.85f) : rgb8(0x0E1013), Blend::Over, lit);
         r.text(TextStyle::Caption, "S", cx, cy + 10, lit ? rgb8(0x0A0B0E) : kTextDim, Align::Center, TextFx::Plain);
         if (hot) r.glow({cx - rr, cy - rr, 2 * rr, 2 * rr}, rr, 10, c.withAlpha(0.3f), true);
         return;
@@ -524,7 +553,7 @@ void PanelView::drawSelector(Renderer& r, PanelBinding& b, const Widget& w, bool
     const float rx[3] = {w.box.r() - 70, w.box.r() - 40, w.box.r() - 70};
     r.polyline(rx, ly, 3, 5, ac, Blend::Over, hot);
     // mode name + position dots
-    r.text(TextStyle::Tab, formatValue(d, b.value(w.param)), cx, w.box.y + 245, on ? kTextBright : kTextDim, Align::Center, TextFx::Shadowed, w.box.w - 60);
+    r.text(TextStyle::Tab, formatValue(d, b.value(w.param)), cx, w.box.y + 245, on ? kTextBright : kTextDim, Align::Center, TextFx::Shadowed, w.box.w * 0.60f);
     const int n = static_cast<int>(d.choices.size());
     const float gap = 26.0f, x0 = cx - gap * static_cast<float>(n - 1) * 0.5f;
     for (int i = 0; i < n; ++i) {
@@ -735,7 +764,7 @@ void PanelView::drawBottomBar(Renderer& r, PanelBinding& b, const PanelControlle
     hMeter(r, def_.outputMeter, b.meter(def_.meterOutL), b.meter(def_.meterOutR));
     r.text(TextStyle::Title, "OUTPUT", def_.outputMeter.x - 18, base, kTextBright, Align::Right, TextFx::Shadowed);
     r.text(TextStyle::Title, formatValue(dout, b.value(def_.outputParam)), def_.outputTrim.r() - 10, base, ho ? kCyan : kAmber, Align::Right, TextFx::NeonCrisp);
-    r.text(TextStyle::Heading, def_.footer, def_.footerBox.cx(), def_.footerBox.cy() + 24, rgb8(0xB4B8C0), Align::Center, TextFx::Shadowed, def_.footerBox.w);
+    r.text(TextStyle::Heading, def_.footer, def_.footerBox.cx(), def_.footerBox.cy() + 24, rgb8(0xD8B07E), Align::Center, TextFx::Shadowed, def_.footerBox.w);
 }
 
 void PanelView::drawPresetMenu(Renderer& r, PanelBinding& b, const PanelController& c) {
