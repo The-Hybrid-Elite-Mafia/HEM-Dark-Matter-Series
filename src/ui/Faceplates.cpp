@@ -149,6 +149,32 @@ std::unique_ptr<PanelBinding> bindRider(dm::rd::OutlawRider& e) {
     return std::make_unique<EngineBinding<dm::rd::OutlawRider>>(e, dm::rd::riderPresets(), meter, feed);
 }
 
+std::unique_ptr<PanelBinding> bindDarkMatter(dm::d4::DarkMatter4D& e) {
+    using namespace dm::d4;
+    auto meter = [](DarkMatter4D& v, int s) -> float {
+        switch (s) {
+        case DmDuckL: return -std::fabs(v.duckDb(0));
+        case DmDuckR: return -std::fabs(v.duckDb(1));
+        case DmReverb: return v.reverbEnergyDb();
+        case DmDelay: return v.delayTapDb();
+        default: return shellMeter(v, s);
+        }
+    };
+    auto feed = [](DarkMatter4D& v, DisplayKind k, int, std::vector<float>& out) {
+        const auto& p = v.params();
+        if (k == DisplayKind::Tunnel && out.size() >= 4) {
+            out[0] = p.get(Depth); out[1] = p.get(Decay); out[2] = v.reverbEnergyDb(); out[3] = p.get(Predelay);
+        } else if (k == DisplayKind::Taps && out.size() >= 5) {
+            out[0] = dm::syncToMs(static_cast<int>(std::lround(p.get(Time))), p.get(Tempo));
+            out[1] = p.get(Feedback); out[2] = p.get(Multiplier); out[3] = p.get(Delay); out[4] = v.delayTapDb();
+        } else if (k == DisplayKind::ShapeCurve) {
+            const std::size_t K = out.size();
+            for (std::size_t i = 0; i < K; ++i) out[i] = v.shapeCurve(1000.0f * static_cast<float>(i) / static_cast<float>(K - 1));
+        }
+    };
+    return std::make_unique<EngineBinding<DarkMatter4D>>(e, darkMatterPresets(), meter, feed);
+}
+
 std::vector<int> phantomVoxHidden() { return {dm::pv::AutoGainOn, dm::pv::Tempo}; }
 
 std::unique_ptr<PanelBinding> bindPhantomVox(dm::pv::PhantomVox& e) {

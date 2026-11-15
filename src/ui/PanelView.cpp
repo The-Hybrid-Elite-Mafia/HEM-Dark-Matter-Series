@@ -932,6 +932,84 @@ void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
             r.text(TextStyle::Title, buf, x1 - 10, bx.bottom() - 26, kCyan, Align::Right, TextFx::NeonCrisp);
         }
     }
+    if (w.display == DisplayKind::Tunnel) {
+        // perspective tunnel: how far it reaches = DECAY, how many rings = DEPTH, how bright = the live
+        // reverb level, the gap before the first ring = PRE-DELAY
+        feed_.assign(4, 0.0f);
+        b.feed(DisplayKind::Tunnel, w.source, feed_);
+        const float depth = std::clamp(feed_[0] / 100.0f, 0.0f, 1.0f);
+        const float decay = std::max(feed_[1], 0.2f);
+        const float energy = std::clamp((feed_[2] + 60.0f) / 60.0f, 0.0f, 1.0f);
+        const float pre = std::clamp(feed_[3] / 500.0f, 0.0f, 1.0f);
+        const float vx = bx.cx(), vy = bx.cy() - 20;
+        const int rings = 6 + static_cast<int>(depth * 14.0f);
+        const float reach = std::clamp(std::log(decay / 0.2f) / std::log(375.0f), 0.0f, 1.0f);   // 0.2 s .. 75 s
+        for (int k = 0; k < rings; ++k) {
+            const float t = static_cast<float>(k) / static_cast<float>(rings);
+            const float z = pre * 0.25f + t * (0.35f + 0.6f * reach);              // 0 = mouth, 1 = far end
+            const float sc = 1.0f / (1.0f + 6.0f * z);
+            const float hw = bx.w * 0.47f * sc, hh = bx.h * 0.44f * sc;
+            const float a = (0.25f + 0.75f * energy) * (1.0f - 0.85f * t);
+            float xs[5] = {vx - hw, vx + hw, vx + hw, vx - hw, vx - hw};
+            float ys[5] = {vy - hh, vy - hh, vy + hh, vy + hh, vy - hh};
+            r.polyline(xs, ys, 5, 2.5f, c.withAlpha(a), Blend::Over, true);
+        }
+        for (int s2 = 0; s2 < 4; ++s2) {   // rails from the mouth into the vanishing point
+            const float sx = s2 % 2 ? 1.0f : -1.0f, sy = s2 / 2 ? 1.0f : -1.0f;
+            const float xs[2] = {vx + sx * bx.w * 0.47f, vx}, ys[2] = {vy + sy * bx.h * 0.44f, vy};
+            r.polyline(xs, ys, 2, 2, c.withAlpha(0.25f + 0.4f * energy), Blend::Over, true);
+        }
+        r.glow({vx - 30, vy - 22, 60, 44}, 20, 30 + 50 * energy, c.withAlpha(0.2f + 0.5f * energy), true);
+        char buf[48];
+        std::snprintf(buf, sizeof buf, "%.1f s  /  %.0f ms PRE", static_cast<double>(decay), static_cast<double>(feed_[3]));
+        r.text(TextStyle::Caption, buf, bx.right() - 20, bx.bottom() - 22, kText, Align::Right);
+        r.text(TextStyle::Label, w.label, bx.x + 22, bx.bottom() - 22, c, Align::Left, TextFx::NeonCrisp);
+    } else if (w.display == DisplayKind::Taps) {
+        // the echoes: one bar per repeat at its real time, height = how loud the repeat is
+        feed_.assign(5, 0.0f);
+        b.feed(DisplayKind::Taps, w.source, feed_);
+        const float tapMs = std::max(feed_[0], 1.0f), fb = std::clamp(feed_[1] / 100.0f, 0.0f, 0.95f);
+        const bool multi = feed_[2] >= 0.5f;
+        const float x0 = bx.x + 40, x1 = bx.right() - 40, y1 = bx.bottom() - 70, y0 = bx.y + 50;
+        const float spanMs = std::max(2000.0f, tapMs * 4.0f);
+        float lvl = 1.0f;
+        for (int k = 1; k <= 24 && lvl > 0.02f; ++k) {
+            const float t = tapMs * static_cast<float>(k);
+            if (t > spanMs) break;
+            const float x = x0 + (x1 - x0) * t / spanMs;
+            const float hgt = (y1 - y0) * lvl;
+            r.fillRound({x - 7, y1 - hgt, 14, hgt}, 4, c.withAlpha(0.9f), Blend::Over, true);
+            r.glow({x - 7, y1 - hgt, 14, hgt}, 4, 14, c.withAlpha(0.3f), true);
+            if (multi)   // 400%: the grain cloud smears each repeat
+                for (int g = 1; g <= 3; ++g)
+                    r.fillRound({x + 14.0f * static_cast<float>(g), y1 - hgt * (1.0f - 0.2f * static_cast<float>(g)), 6, hgt * (1.0f - 0.2f * static_cast<float>(g))}, 3, kCyan.withAlpha(0.45f), Blend::Over, true);
+            lvl *= fb;
+        }
+        r.fillRound({x0, y1, x1 - x0, 2}, 1, kTextDim.withAlpha(0.5f), Blend::Over);
+        for (int ms = 0; ms <= static_cast<int>(spanMs); ms += spanMs > 3000.0f ? 1000 : 500) {
+            char buf[16]; std::snprintf(buf, sizeof buf, "%.1fs", ms / 1000.0);
+            axisText(buf, x0 + (x1 - x0) * static_cast<float>(ms) / spanMs, y1 + 34, Align::Center);
+        }
+        char buf[48]; std::snprintf(buf, sizeof buf, "%.0f ms per repeat", static_cast<double>(tapMs));
+        r.text(TextStyle::Caption, buf, bx.right() - 20, bx.y + 36, kText, Align::Right);
+        r.text(TextStyle::Label, w.label, bx.x + 22, bx.y + 40, c, Align::Left, TextFx::NeonCrisp);
+    } else if (w.display == DisplayKind::ShapeCurve) {
+        // how the ducked wet level comes back after the dry signal stops (engine's own curve)
+        constexpr int K = 64;
+        feed_.assign(K, 1.0f);
+        b.feed(DisplayKind::ShapeCurve, w.source, feed_);
+        const float x0 = bx.x + 24, x1 = bx.right() - 24, y0 = bx.y + 24, y1 = bx.bottom() - 46;
+        float xs[K], ys[K];
+        for (int i = 0; i < K; ++i) {
+            xs[i] = x0 + (x1 - x0) * static_cast<float>(i) / (K - 1);
+            ys[i] = y1 - (y1 - y0) * std::clamp(feed_[static_cast<std::size_t>(i)], 0.0f, 1.0f);
+        }
+        r.polyline(xs, ys, K, 10, c.withAlpha(0.25f), Blend::Add, true);
+        r.polyline(xs, ys, K, 4, c, Blend::Over, true);
+        axisText("0", x0, bx.bottom() - 16, Align::Left);
+        axisText("1 s", x1, bx.bottom() - 16, Align::Right);
+        axisText("WET RETURN", bx.cx(), bx.bottom() - 16, Align::Center);
+    }
     if (w.display == DisplayKind::NoteGrid) {
         // 12 pitch-class cells: brightness = how sure the key detector is of that note; outlined = in the
         // scale it settled on; line under it: the detected key

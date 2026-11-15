@@ -173,6 +173,11 @@ int main(int argc, char** argv) {
     static auto bRider = bindRider(rider);
     bRider->loadPreset(0);
     jobs.push_back({"HEM_OUTLAW_RIDER", [&](const std::function<void()>& t) { feedShell(rider, t); }, [&]() -> PanelBinding& { return *bRider; }, riderPanel(), shellHidden()});
+    static dm::d4::DarkMatter4D dm4;
+    dm4.prepare(48000, 512);
+    static auto bDm = bindDarkMatter(dm4);
+    bDm->loadPreset(0);
+    jobs.push_back({"HEM_DARK_MATTER_4D", [&](const std::function<void()>& t) { feedShell(dm4, t); }, [&]() -> PanelBinding& { return *bDm; }, darkMatterPanel(), tempoHidden(static_cast<int>(dm::d4::Tempo))});
     jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [](const std::function<void()>&) {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
 
     int failures = 0;
