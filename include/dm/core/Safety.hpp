@@ -70,14 +70,14 @@ public:
 
     void prepare(float sampleRate, float lookaheadMs = 1.5f, float releaseMs = 80.0f) {
         sr_ = sampleRate;
-        look_ = std::max(1, static_cast<int>(lookaheadMs * 0.001f * sr_));
+        look_ = std::max(0, static_cast<int>(lookaheadMs * 0.001f * sr_));
         d_[0].prepare(look_ + 4);
         d_[1].prepare(look_ + 4);
         ring_.assign(static_cast<std::size_t>(look_ + 1), 1.0f);
         dq_.assign(static_cast<std::size_t>(look_ + 2), 0);
         rel_ = onePoleCoef(releaseMs, sr_);
         ceiling_ = dbToGain(kCeilingDb);
-        attackCoef_ = std::exp(-4.6f / static_cast<float>(look_)); // ~99% of a step inside the look-ahead
+        attackCoef_ = look_ > 0 ? std::exp(-4.6f / static_cast<float>(look_)) : 0.0f; // ~99% of a step inside the look-ahead; 0 = instant
         reset();
     }
     void reset() noexcept {

@@ -125,41 +125,81 @@ void TransientModule::process(float& l, float& r) noexcept {
 }
 
 // ===================================== TONE ============================================================
-BiquadCoefs ToneModule::bandCoefs(const a::RackToneModeTune& m, int b, float gain, float sr) noexcept {
+BiquadCoefs ToneModule::bandCoefs(const a::RackToneModeTune& m, int b, float gain, float shift, float sr) noexcept {
     const auto& t = m.band[b];
     const float q = m.propQ ? t.q * (1.0f + std::fabs(gain) / 12.0f) : t.q;
     const BiquadType type = t.type == 1 ? BiquadType::LowShelf : t.type == 2 ? BiquadType::HighShelf : BiquadType::Peak;
-    return designBiquad(type, t.hz, q, gain, sr);
+    const float hz = clampf(t.hz * std::pow(2.0f, a::kHandleOctaves * shift * 0.01f), 15.0f, 0.45f * sr);
+    // AIR+ (band 5): positive boosts are split between this static shelf and the dynamic exciter.
+    const float g = (b == 5 && gain > 0.0f) ? gain * (1.0f - a::kAirDynSplit) : gain;
+    return designBiquad(type, hz, q, g, sr);
 }
-void ToneModule::prepare(float sr) { sr_ = sr; analyzer_.prepare(sr_); reset(); }
+// Butterworth section Qs for 12 / 24 / 48 dB per octave; x1 (6 dB) uses a one-pole.
+int ToneModule::slopeSections(int slope, float* qs) noexcept {
+    switch (slope) {
+    case 1: qs[0] = 0.7071f; return 1;
+    case 2: qs[0] = 0.5412f; qs[1] = 1.3066f; return 2;
+    case 3: qs[0] = 0.5098f; qs[1] = 0.6013f; qs[2] = 0.9000f; qs[3] = 2.5629f; return 4;
+    default: return 0;
+    }
+}
+void ToneModule::prepare(float sr) {
+    sr_ = sr;
+    analyzer_.prepare(sr_);
+    airHp_.set(designBiquad(BiquadType::HighPass, a::kAirExciterHz, 0.707f, 0, sr_));
+    airEnv_.prepare(5.0f, 120.0f, sr_);
+    reset();
+}
 void ToneModule::reset() noexcept {
     for (auto& b : band_) b.reset();
     for (auto& f : hpf_) f.reset();
     for (auto& f : lpf_) f.reset();
+    for (auto& f : hp1_) f.reset();
+    for (auto& f : lp1_) f.reset();
+    airHp_.reset(); airEnv_.reset();
 }
 void ToneModule::update(const float* v, const float* old) noexcept {
-    if (!diff(v, old, {Mode, Sub, Low, Mid, HiMid, High, Air, Hpf, Lpf, Slope})) return;
+    if (!diff(v, old, {Mode, Sub, Low, Mid, HiMid, High, Air, Hpf, Lpf, Slope, SubF, LowF, MidF, HiMidF, HighF, AirF})) return;
     m_ = &a::kToneModeTable[pick(v[Mode], a::kToneModes)];
     for (int b = 0; b < 6; ++b) {
         const float g = v[Sub + static_cast<std::size_t>(b)];
-        band_[static_cast<std::size_t>(b)].set(bandCoefs(*m_, b, g, sr_));
+        band_[static_cast<std::size_t>(b)].set(bandCoefs(*m_, b, g, v[SubF + static_cast<std::size_t>(b)], sr_));
         bandOn_[static_cast<std::size_t>(b)] = g != 0.0f;
     }
-    steep_ = pick(v[Slope], 2) == 1;
-    const float q1 = steep_ ? 0.5412f : 0.7071f, q2 = 1.3066f;
+    airDyn_ = v[Air] > 0.0f ? v[Air] * a::kAirDynSplit : 0.0f;
+    slope_ = pick(v[Slope], 4);
+    float qs[4];
+    sections_ = slopeSections(slope_, qs);
     hpfOn_ = v[Hpf] > 10.5f;
     lpfOn_ = v[Lpf] < 21900.0f;
-    hpf_[0].set(designBiquad(BiquadType::HighPass, v[Hpf], q1, 0, sr_));
-    hpf_[1].set(designBiquad(BiquadType::HighPass, v[Hpf], q2, 0, sr_));
-    lpf_[0].set(designBiquad(BiquadType::LowPass, v[Lpf], q1, 0, sr_));
-    lpf_[1].set(designBiquad(BiquadType::LowPass, v[Lpf], q2, 0, sr_));
+    for (int k = 0; k < sections_; ++k) {
+        hpf_[static_cast<std::size_t>(k)].set(designBiquad(BiquadType::HighPass, v[Hpf], qs[k], 0, sr_));
+        lpf_[static_cast<std::size_t>(k)].set(designBiquad(BiquadType::LowPass, v[Lpf], qs[k], 0, sr_));
+    }
+    for (auto& f : hp1_) f.setCutoff(v[Hpf], sr_);
+    for (auto& f : lp1_) f.setCutoff(v[Lpf], sr_);
 }
 void ToneModule::process(float& l, float& r) noexcept {
+    // AIR+ exciter: quiet top end is lifted more than loud top end (smooth air, no harsh peaks).
+    float airL = 0, airR = 0;
+    if (airDyn_ > 0.0f) {
+        const float hl = airHp_.process(0, l), hr = airHp_.process(1, r);
+        const float envDb = gainToDb(airEnv_.process(std::max(std::fabs(hl), std::fabs(hr))));
+        const float liftDb = airDyn_ * clampf((-20.0f - envDb) / 30.0f, 0.0f, 1.0f) + airDyn_ * 0.25f;
+        const float k = dbToGain(liftDb) - 1.0f;
+        airL = hl * k; airR = hr * k;
+    }
     for (int ch = 0; ch < 2; ++ch) {
-        float x = ch ? r : l;
-        if (hpfOn_) { x = hpf_[0].process(ch, x); if (steep_) x = hpf_[1].process(ch, x); }
+        float x = (ch ? r : l) + (ch ? airR : airL);
+        if (hpfOn_) {
+            if (sections_ == 0) x = hp1_[static_cast<std::size_t>(ch)].hp(x);
+            for (int k = 0; k < sections_; ++k) x = hpf_[static_cast<std::size_t>(k)].process(ch, x);
+        }
         for (std::size_t b = 0; b < 6; ++b) if (bandOn_[b]) x = band_[b].process(ch, x);
-        if (lpfOn_) { x = lpf_[0].process(ch, x); if (steep_) x = lpf_[1].process(ch, x); }
+        if (lpfOn_) {
+            if (sections_ == 0) x = lp1_[static_cast<std::size_t>(ch)].lp(x);
+            for (int k = 0; k < sections_; ++k) x = lpf_[static_cast<std::size_t>(k)].process(ch, x);
+        }
         if (m_->satDrive > 1.0f) x = saturate(m_->sat, x, m_->satDrive);
         (ch ? r : l) = x;
     }
@@ -168,16 +208,28 @@ void ToneModule::process(float& l, float& r) noexcept {
 float ToneModule::curveDb(const float* v, float hz, float sr) noexcept {
     const auto& m = a::kToneModeTable[pick(v[Mode], a::kToneModes)];
     float db = 0;
-    for (int b = 0; b < 6; ++b) db += bandCoefs(m, b, v[Sub + static_cast<std::size_t>(b)], sr).magnitudeDb(hz, sr);
-    const bool steep = pick(v[Slope], 2) == 1;
-    const float q1 = steep ? 0.5412f : 0.7071f;
+    for (int b = 0; b < 6; ++b)
+        db += bandCoefs(m, b, v[Sub + static_cast<std::size_t>(b)], v[SubF + static_cast<std::size_t>(b)], sr).magnitudeDb(hz, sr);
+    // Display shows AIR+ at full lift (the exciter half reaches it on quiet top end).
+    if (v[Air] > 0.0f) {
+        const auto& t = m.band[5];
+        const float hzA = clampf(t.hz * std::pow(2.0f, a::kHandleOctaves * v[AirF] * 0.01f), 15.0f, 0.45f * sr);
+        db += designBiquad(BiquadType::HighShelf, hzA, t.q, v[Air], sr).magnitudeDb(hz, sr)
+            - bandCoefs(m, 5, v[Air], v[AirF], sr).magnitudeDb(hz, sr);
+    }
+    float qs[4];
+    const int sec = slopeSections(pick(v[Slope], 4), qs);
+    auto onePoleDb = [&](float fc, bool high) {
+        const float x = hz / fc;
+        return high ? 10.0f * std::log10(x * x / (1.0f + x * x)) : 10.0f * std::log10(1.0f / (1.0f + x * x));
+    };
     if (v[Hpf] > 10.5f) {
-        db += designBiquad(BiquadType::HighPass, v[Hpf], q1, 0, sr).magnitudeDb(hz, sr);
-        if (steep) db += designBiquad(BiquadType::HighPass, v[Hpf], 1.3066f, 0, sr).magnitudeDb(hz, sr);
+        if (sec == 0) db += onePoleDb(v[Hpf], true);
+        for (int k = 0; k < sec; ++k) db += designBiquad(BiquadType::HighPass, v[Hpf], qs[k], 0, sr).magnitudeDb(hz, sr);
     }
     if (v[Lpf] < 21900.0f) {
-        db += designBiquad(BiquadType::LowPass, v[Lpf], q1, 0, sr).magnitudeDb(hz, sr);
-        if (steep) db += designBiquad(BiquadType::LowPass, v[Lpf], 1.3066f, 0, sr).magnitudeDb(hz, sr);
+        if (sec == 0) db += onePoleDb(v[Lpf], false);
+        for (int k = 0; k < sec; ++k) db += designBiquad(BiquadType::LowPass, v[Lpf], qs[k], 0, sr).magnitudeDb(hz, sr);
     }
     return db;
 }
@@ -299,11 +351,12 @@ void ModModule::endChunk() noexcept {
 void MaxModule::prepare(float sr) { sr_ = sr; reset(); }
 void MaxModule::reset() noexcept {
     split_.reset();
+    limG_ = 1; limGr_ = 0;
     for (auto& e : env_) e.reset();
     actAcc_ = {0, 0, 0};
 }
 void MaxModule::update(const float* v, const float* old) noexcept {
-    if (!diff(v, old, {Mode, Multi, Max, XoverLow, XoverHigh, Clip})) return;
+    if (!diff(v, old, {Mode, Multi, Max, XoverLow, XoverHigh, Clip, BandLow, BandMid, BandHigh})) return;
     m_ = &a::kMaxModeTable[pick(v[Mode], a::kMaxModes)];
     multi_ = v[Multi] * 0.01f;
     downThr_ = -6.0f - 24.0f * multi_;
@@ -312,6 +365,9 @@ void MaxModule::update(const float* v, const float* old) noexcept {
     upRatio_ = 1.0f + (m_->upRatio - 1.0f) * multi_;
     upRange_ = m_->upRangeDb * multi_;
     push_ = dbToGain(a::kMaxPushDb * v[Max] * 0.01f);
+    bandAmt_ = {v[BandLow] * 0.01f, v[BandMid] * 0.01f, v[BandHigh] * 0.01f};
+    limThr_ = dbToGain(a::kMaxLimitDb);
+    limRel_ = onePoleCoef(a::kMaxLimitRelMs, sr_);
     clip_ = pick(v[Clip], 4);
     split_.set(v[XoverLow], v[XoverHigh], sr_);
     for (auto& e : env_) e.prepare(m_->attackMs, m_->releaseMs, sr_);
@@ -331,6 +387,7 @@ void MaxModule::process(float& l, float& r) noexcept {
             if (level > downThr_) g -= (level - downThr_) * (1.0f - 1.0f / downRatio_);
             else if (level < upThr_ && level > -70.0f) g += std::min(upRange_, (upThr_ - level) * (1.0f - 1.0f / upRatio_));
         }
+        g *= bandAmt_[b]; // AMOUNT PER BAND (LOW / MID / HIGH)
         actAcc_[b] = std::max(actAcc_[b], std::fabs(g));
         const float lin = lerp(1.0f, dbToGain(g), m_->parallel);
         outL += bl * lin; outR += br * lin;
@@ -359,8 +416,18 @@ void MaxModule::process(float& l, float& r) noexcept {
     };
     l = clipOne(outL);
     r = clipOne(outR);
+    // MAX: wideband zero-latency peak limiter after the clipper (instant attack, smooth release).
+    if (push_ > 1.0f) {
+        const float pk = std::max(std::fabs(l), std::fabs(r));
+        const float need = pk > limThr_ ? limThr_ / pk : 1.0f;
+        limG_ = need < limG_ ? need : need + limRel_ * (limG_ - need);
+        l *= limG_; r *= limG_;
+        limGrMax_ = std::max(limGrMax_, -gainToDb(limG_));
+    }
 }
 void MaxModule::endChunk() noexcept {
+    limGr_ = limGrMax_;
+    limGrMax_ = 0;
     for (std::size_t b = 0; b < 3; ++b) {
         act_[b] = clampf(actAcc_[b] / 12.0f * 100.0f, 0.0f, 100.0f);
         actAcc_[b] = 0;

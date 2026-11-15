@@ -72,6 +72,7 @@ public:
     void updateCore(const float* v, const float* old, bool force) noexcept;
     void processCore(float& l, float& r) noexcept;
     [[nodiscard]] int coreLatency() const noexcept { return 0; }
+    [[nodiscard]] float limiterLookaheadMs() const noexcept { return a::kZeroLatency ? 0.0f : assumed::kLimiterLookaheadMs; }
     [[nodiscard]] bool coreActive() const noexcept { return satOn_ || dynOn_ || toneOn_ || modOn_ || maxOn_; }
     void afterChunk(int) noexcept { sat_.endChunk(); comp_.endChunk(); mod_.endChunk(); max_.endChunk(); }
 
@@ -106,6 +107,7 @@ public:
     }
     void processCore(float& l, float& r) noexcept { m_.process(l, r); }
     [[nodiscard]] int coreLatency() const noexcept { return 0; }
+    [[nodiscard]] float limiterLookaheadMs() const noexcept { return a::kZeroLatency ? 0.0f : assumed::kLimiterLookaheadMs; }
     [[nodiscard]] bool coreActive() const noexcept {
         if constexpr (requires(const Module& m) { m.active(); }) return on_ && m_.active();
         else return on_;

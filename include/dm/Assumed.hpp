@@ -263,6 +263,12 @@ inline constexpr float kMaxPushDb      = 12.0f;  // ASSUMED: MAX 100% -> +12 dB 
 inline constexpr float kXoverLowDef    = 250.0f; // BRIEF
 inline constexpr float kXoverHighDef   = 5200.0f;// BRIEF
 inline constexpr float kSoftClipKneeDb = -1.0f;  // ASSUMED
+inline constexpr float kMaxLimitDb     = -0.3f;  // ASSUMED: MAX wideband limiter threshold (before the clipper)
+inline constexpr float kMaxLimitRelMs  = 60.0f;  // ASSUMED
+inline constexpr float kHandleOctaves  = 1.0f;   // ASSUMED: tone handle travel +/- 1 octave from the mode's band
+inline constexpr float kAirExciterHz   = 9000.0f;// ASSUMED: AIR+ dynamic exciter band
+inline constexpr float kAirDynSplit    = 0.5f;   // ASSUMED: half of AIR+ boost is static shelf, half dynamic (more on quiet HF)
+inline constexpr bool  kZeroLatency    = true;   // BRIEF-MATCH: rack + split plug-ins run with zero latency
 
 } // namespace sr
 

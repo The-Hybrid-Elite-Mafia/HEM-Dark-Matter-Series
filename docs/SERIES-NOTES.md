@@ -6,9 +6,13 @@ INPUT / OUTPUT trims and LED meters, K-weighted AUTO-GAIN, and the -0.1 dBFS loo
 
 ## HEM SYNDICATE RACK (+ 6 split plug-ins)
 SATURATE (8 modes, SAT fader, CRISP/WARM tilt) → DYNAMICS (COMP 8 modes + COLOR + SIDECHAIN high-pass,
-TRANSIENT + SHAPE) → TONE (8 voicings, SUB/LOW/MID/HI MID/HIGH/AIR+, HPF/LPF x2 = 12 dB/oct, x4 = 24 dB/oct)
-→ MODULATE (6 modes, MOD, DEPTH, DRIFT, ANALOG wow/flutter) → MAXIMIZE (7 modes, MULTI 3-band up/down,
-MAX push, adjustable 250 Hz / 5.2 kHz LR4 crossovers, CLIP OFF/SOFT/HARD/MST).
+TRANSIENT + SHAPE) → TONE (8 voicings, SUB/LOW/MID/HI MID/HIGH/AIR+, TONE HANDLES move each band ±1 octave,
+AIR+ = static shelf + dynamic exciter that lifts quiet top end more than loud, HPF/LPF variable slope
+x1/x2/x4/x8 = 6/12/24/48 dB/oct) → MODULATE (6 modes, MOD, DEPTH, DRIFT, ANALOG wow/flutter) → MAXIMIZE
+(7 modes, MULTI 3-band up/down with AMOUNT PER BAND LOW/MID/HIGH, adjustable 250 Hz / 5.2 kHz LR4 crossovers,
+MAX = push → CLIP OFF/SOFT/HARD/MST → zero-latency wideband limiter).
+**Zero latency**: the rack and all 6 split plug-ins run their -0.1 dBFS safety limiter with no look-ahead
+(instant gain + hard ceiling), so they report 0 samples like the original product.
 TONE ROUTING moves TONE to PRE (first), POST DYN (default) or POST (after MODULATE).
 The brief's MAXIMIZE mode that carried another company's product name is called **TRIPLE CRUSH**.
 Presets follow the brief's categories 01 Mixbus … 08 Acoustic Guitar (Acoustic Electric, Airy Crush,

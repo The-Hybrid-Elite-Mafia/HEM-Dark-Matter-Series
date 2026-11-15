@@ -34,7 +34,7 @@ inline constexpr const char* kModNames[a::kModModes] = {
 inline constexpr const char* kMaxNames[a::kMaxModes] = {
     a::kMaxModeTable[0].name, a::kMaxModeTable[1].name, a::kMaxModeTable[2].name, a::kMaxModeTable[3].name,
     a::kMaxModeTable[4].name, a::kMaxModeTable[5].name, a::kMaxModeTable[6].name};
-inline constexpr const char* kSlopeNames[2] = {"x2", "x4"};
+inline constexpr const char* kSlopeNames[4] = {"x1", "x2", "x4", "x8"}; // 6 / 12 / 24 / 48 dB per octave
 inline constexpr const char* kClipNames[4] = {"OFF", "SOFT", "HARD", "MST"};
 
 // ===================================== SATURATE ========================================================
@@ -108,7 +108,8 @@ private:
 // ===================================== TONE ============================================================
 class ToneModule {
 public:
-    enum : std::size_t { Mode, Sub, Low, Mid, HiMid, High, Air, Hpf, Lpf, Slope, kN };
+    enum : std::size_t { Mode, Sub, Low, Mid, HiMid, High, Air, Hpf, Lpf, Slope,
+                         SubF, LowF, MidF, HiMidF, HighF, AirF, kN };
     static constexpr std::array<ParamDesc, kN> kParams = {{
         {"tone_mode", "TONE MODE", 0, a::kToneModes - 1, 4, "", C(kToneNames)},
         {"sub", "SUB", -12, 12, 0, "dB"},
@@ -119,7 +120,14 @@ public:
         {"air", "AIR+", -12, 12, 0, "dB"},
         {"hpf", "HPF", 10, 500, a::kToneHpfDefault, "Hz"},
         {"lpf", "LPF", 2000, 22000, a::kToneLpfDefault, "Hz"},
-        {"slope", "SLOPE", 0, 1, 0, "", C(kSlopeNames)},
+        {"slope", "SLOPE", 0, 3, 1, "", C(kSlopeNames)},
+        // TONE HANDLES: drag a band left/right on the curve = move it up to +/- 1 octave from the mode's frequency.
+        {"sub_freq", "SUB HANDLE", -100, 100, 0, "%"},
+        {"low_freq", "LOW HANDLE", -100, 100, 0, "%"},
+        {"mid_freq", "MID HANDLE", -100, 100, 0, "%"},
+        {"hi_mid_freq", "HI MID HANDLE", -100, 100, 0, "%"},
+        {"high_freq", "HIGH HANDLE", -100, 100, 0, "%"},
+        {"air_freq", "AIR+ HANDLE", -100, 100, 0, "%"},
     }};
     void prepare(float sr);
     void reset() noexcept;
@@ -129,13 +137,20 @@ public:
     // UI curve: combined EQ + filter response at hz for the given parameter slice.
     [[nodiscard]] static float curveDb(const float* v, float hz, float sr) noexcept;
 private:
-    static BiquadCoefs bandCoefs(const a::RackToneModeTune& m, int b, float gain, float sr) noexcept;
+    static BiquadCoefs bandCoefs(const a::RackToneModeTune& m, int b, float gain, float shift, float sr) noexcept;
+    static int slopeSections(int slope, float* qs) noexcept;
     float sr_ = 48000;
     const a::RackToneModeTune* m_ = &a::kToneModeTable[4];
     std::array<StereoBiquad, 6> band_{};
     std::array<bool, 6> bandOn_{};
-    std::array<StereoBiquad, 2> hpf_{}, lpf_{};
-    bool hpfOn_ = false, lpfOn_ = false, steep_ = false;
+    std::array<StereoBiquad, 4> hpf_{}, lpf_{};
+    std::array<OnePole, 2> hp1_{}, lp1_{};
+    bool hpfOn_ = false, lpfOn_ = false;
+    int slope_ = 1, sections_ = 1;
+    // AIR+ exciter (dynamic part)
+    float airDyn_ = 0;
+    StereoBiquad airHp_{};
+    EnvFollower airEnv_{};
     AnalyzerTap analyzer_{};
 };
 
@@ -173,7 +188,7 @@ private:
 // ===================================== MAXIMIZE ========================================================
 class MaxModule {
 public:
-    enum : std::size_t { Mode, Multi, Max, XoverLow, XoverHigh, Clip, kN };
+    enum : std::size_t { Mode, Multi, Max, XoverLow, XoverHigh, Clip, BandLow, BandMid, BandHigh, kN };
     static constexpr std::array<ParamDesc, kN> kParams = {{
         {"max_mode", "MAXIMIZE MODE", 0, a::kMaxModes - 1, 0, "", C(kMaxNames)},
         {"multi", "MULTI", 0, 100, a::kMultiDefault, "%"},
@@ -181,6 +196,9 @@ public:
         {"xover_low", "LOW X-OVER", 60, 600, a::kXoverLowDef, "Hz"},
         {"xover_high", "HIGH X-OVER", 2000, 12000, a::kXoverHighDef, "Hz"},
         {"clip", "CLIP", 0, 3, 1, "", C(kClipNames)},
+        {"band_low", "LOW AMOUNT", 0, 100, 100, "%"},
+        {"band_mid", "MID AMOUNT", 0, 100, 100, "%"},
+        {"band_high", "HIGH AMOUNT", 0, 100, 100, "%"},
     }};
     void prepare(float sr);
     void reset() noexcept;
@@ -195,7 +213,10 @@ private:
     const a::MaxModeTune* m_ = &a::kMaxModeTable[0];
     ThreeBandSplit split_{};
     std::array<EnvFollower, 3> env_{};
-    std::array<float, 3> bandGain_{}, actAcc_{}, act_{};
+    std::array<float, 3> bandGain_{}, bandAmt_{1, 1, 1}, actAcc_{}, act_{};
+    float limG_ = 1, limRel_ = 0, limThr_ = 1, limGr_ = 0, limGrMax_ = 0;
+public:
+    [[nodiscard]] float limiterGrDb() const noexcept { return limGr_; }
 };
 
 } // namespace dm::sr

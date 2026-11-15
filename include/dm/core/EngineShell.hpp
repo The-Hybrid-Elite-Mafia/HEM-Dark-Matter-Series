@@ -67,7 +67,7 @@ public:
         outTrim_.prepare(20.0f, sr_);
         bypassMix_.prepare(assumed::kBypassFadeMs / 4.6f, sr_);
         autoGain_.prepare(sr_, self().autoGainWindowMs(), assumed::kAutoGainMaxDb);
-        limiter_.prepare(sr_, assumed::kLimiterLookaheadMs, assumed::kLimiterReleaseMs);
+        limiter_.prepare(sr_, self().limiterLookaheadMs(), assumed::kLimiterReleaseMs);
         self().prepareCore(sr_);
         const int maxLat = self().maxCoreLatency() + limiter_.latency();
         for (auto& d : dryDelay_) d.prepare(maxLat + 8);
@@ -161,6 +161,8 @@ public:
 
     // Hooks with defaults (override in Derived when needed).
     [[nodiscard]] int maxCoreLatency() const noexcept { return self().coreLatency(); }
+    // 0 = zero-latency safety limiter (instant gain + hard ceiling); > 0 = look-ahead limiter.
+    [[nodiscard]] float limiterLookaheadMs() const noexcept { return assumed::kLimiterLookaheadMs; }
     [[nodiscard]] float autoGainWindowMs() const noexcept { return assumed::kAutoGainWindowMs; }
     void afterChunk(int) noexcept {}
 
