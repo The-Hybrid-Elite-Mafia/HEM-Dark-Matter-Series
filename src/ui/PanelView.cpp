@@ -214,7 +214,23 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
 // =====================================================================================================
 //  Moving parts (GPU)
 // =====================================================================================================
+void PanelView::sample(PanelBinding& b) {
+    if (hist_.size() != def_.widgets.size()) { hist_.assign(def_.widgets.size(), {}); histPos_.assign(def_.widgets.size(), 0); }
+    for (std::size_t i = 0; i < def_.widgets.size(); ++i) {
+        const Widget& w = def_.widgets[i];
+        if (w.kind != Kind::Display || w.display != DisplayKind::Waveform) continue;
+        auto& h = hist_[i];
+        if (h.empty()) h.assign(kHistory * 3, -120.0f);
+        std::vector<float> now(3, -120.0f);
+        b.feed(DisplayKind::Waveform, w.source, now);
+        const std::size_t at = (histPos_[i] % kHistory) * 3;
+        h[at] = now[0]; h[at + 1] = now[1]; h[at + 2] = now[2];
+        ++histPos_[i];
+    }
+}
+
 void PanelView::draw(Renderer& r, PanelBinding& b, const PanelController& c) {
+    sample(b);
     drawChassisLights(r);
     for (std::size_t i = 0; i < def_.widgets.size(); ++i) {
         const Hit h = c.active().t != Hit::T::None ? c.active() : c.hover();
@@ -391,7 +407,7 @@ void PanelView::drawFader(Renderer& r, PanelBinding& b, const Widget& w, bool ho
         for (int t = 0; t < nt; ++t) {
             const float f = static_cast<float>(t) / static_cast<float>(nt - 1);
             const float y = y0 + (y1 - y0) * f;
-            if (tall) {
+            if (tall && w.size >= 1.0f) {
                 // real scale read back from the parameter's own range
                 const std::string v = formatValue(d, fromNorm(d, 1.0f - f));
                 r.text(TextStyle::Caption, v, sx + 62, y + 10, kTextDim, Align::Left);
@@ -861,6 +877,60 @@ void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
         const float marks[3] = {100.0f, 1000.0f, 10000.0f};
         const char* names[3] = {"100", "1k", "10k"};
         for (int i = 0; i < 3; ++i) axisText(names[i], curveX(w.box, marks[i]), bx.bottom() - 30, Align::Center);
+    }
+    if (w.display == DisplayKind::Waveform) {
+        // scrolling ride: orange = input level, cyan = output level (mirrored about the centre line),
+        // bright cyan trace = gain the rider applied (right-hand +/-24 dB scale), amber = TARGET
+        const std::size_t idx = static_cast<std::size_t>(&w - def_.widgets.data());
+        const float x0 = bx.x + 110, x1 = bx.right() - 110, cy = bx.cy(), half = bx.h * 0.5f - 50;
+        auto lvl = [&](float db) { return half * std::clamp((db + 70.0f) / 70.0f, 0.0f, 1.0f); };
+        auto gy = [&](float g) { return cy - half * std::clamp(g / 24.0f, -1.0f, 1.0f); };
+        r.fillRound({x0, cy - 1, x1 - x0, 2}, 1, kTextDim.withAlpha(0.4f), Blend::Over);
+        for (int dbm : {-10, -20, -30, -40, -50, -60}) {
+            char buf[8]; std::snprintf(buf, sizeof buf, "%d", dbm);
+            axisText(buf, x0 - 16, cy - lvl(static_cast<float>(dbm)) + 9, Align::Right);
+        }
+        for (int g : {12, -12}) {
+            char buf[8]; std::snprintf(buf, sizeof buf, "%+d", g);
+            axisText(buf, x1 + 16, gy(static_cast<float>(g)) + 9, Align::Left);
+        }
+        axisText("dBFS", x0 - 16, bx.y + 40, Align::Right);
+        axisText("RIDE dB", bx.right() - 14, bx.y + 40, Align::Right);
+        if (w.param >= 0) {   // TARGET level lines
+            const float t = lvl(b.value(w.param));
+            for (float sgn : {-1.0f, 1.0f})
+                for (int k = 0; k < 40; ++k) {
+                    const float a0 = x0 + (x1 - x0) * static_cast<float>(2 * k) / 80.0f, a1 = x0 + (x1 - x0) * static_cast<float>(2 * k + 1) / 80.0f;
+                    r.fillRound({a0, cy - sgn * t - 1.5f, a1 - a0, 3}, 1.5f, kAmber.withAlpha(0.55f), Blend::Over);
+                }
+            axisText("TARGET", x0 + 10, cy - t - 12, Align::Left);
+        }
+        if (idx < hist_.size() && !hist_[idx].empty()) {
+            const auto& h = hist_[idx];
+            const std::size_t n = kHistory, start = histPos_[idx];
+            const float step = (x1 - x0) / static_cast<float>(n);
+            float gxs[kHistory], gys[kHistory], ixs[kHistory], iys[kHistory], iyb[kHistory];
+            for (std::size_t k = 0; k < n; ++k) {
+                const std::size_t at = ((start + k) % n) * 3;
+                const float x = x0 + step * static_cast<float>(k);
+                const float hi = lvl(h[at]), ho = lvl(h[at + 2]);
+                // output level: thin cyan bars every other step (reads like a waveform at a glance)
+                if (ho > 0.5f && (k & 1u) == 0u)
+                    r.fillRound({x, cy - ho, std::max(step * 1.2f, 1.0f), 2 * ho}, 0.5f, kCyan.withAlpha(0.42f), Blend::Over, true);
+                ixs[k] = x; iys[k] = cy - hi; iyb[k] = cy + hi;
+                gxs[k] = x; gys[k] = gy(h[at + 1] < -100.0f ? 0.0f : h[at + 1]);
+            }
+            // input level: orange envelope outline above and below the centre line
+            r.polyline(ixs, iys, static_cast<int>(n), 9, kAmber.withAlpha(0.22f), Blend::Add, true);
+            r.polyline(ixs, iys, static_cast<int>(n), 3.5f, kAmber, Blend::Over, true);
+            r.polyline(ixs, iyb, static_cast<int>(n), 9, kAmber.withAlpha(0.22f), Blend::Add, true);
+            r.polyline(ixs, iyb, static_cast<int>(n), 3.5f, kAmber, Blend::Over, true);
+            r.polyline(gxs, gys, static_cast<int>(n), 12, kCyan.withAlpha(0.25f), Blend::Add, true);
+            r.polyline(gxs, gys, static_cast<int>(n), 4, rgb8(0x9FF8FF), Blend::Over, true);
+            const std::size_t last = ((start + n - 1) % n) * 3;
+            char buf[32]; std::snprintf(buf, sizeof buf, "RIDE %+.1f dB", static_cast<double>(h[last + 1] < -100.0f ? 0.0f : h[last + 1]));
+            r.text(TextStyle::Title, buf, x1 - 10, bx.bottom() - 26, kCyan, Align::Right, TextFx::NeonCrisp);
+        }
     }
     if (w.display == DisplayKind::NoteGrid) {
         // 12 pitch-class cells: brightness = how sure the key detector is of that note; outlined = in the

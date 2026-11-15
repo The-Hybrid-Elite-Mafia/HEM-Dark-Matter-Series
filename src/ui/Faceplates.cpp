@@ -140,6 +140,15 @@ std::unique_ptr<PanelBinding> bindIronLock(dm::il::IronLock& e) {
     return std::make_unique<EngineBinding<dm::il::IronLock>>(e, dm::il::ironLockPresets(), meter, feed);
 }
 
+std::unique_ptr<PanelBinding> bindRider(dm::rd::OutlawRider& e) {
+    auto meter = [](dm::rd::OutlawRider& v, int s) -> float { return s == RdGain ? v.gainDb() : shellMeter(v, s); };
+    auto feed = [](dm::rd::OutlawRider& v, DisplayKind k, int, std::vector<float>& out) {
+        if (k != DisplayKind::Waveform || out.size() < 3) return;
+        out[0] = shellMeter(v, SrIn); out[1] = v.gainDb(); out[2] = shellMeter(v, SrOut);
+    };
+    return std::make_unique<EngineBinding<dm::rd::OutlawRider>>(e, dm::rd::riderPresets(), meter, feed);
+}
+
 std::vector<int> phantomVoxHidden() { return {dm::pv::AutoGainOn, dm::pv::Tempo}; }
 
 std::unique_ptr<PanelBinding> bindPhantomVox(dm::pv::PhantomVox& e) {

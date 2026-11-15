@@ -61,7 +61,7 @@ bool makeContext(std::string* err) {
 namespace {
 struct Job {
     std::string name;
-    std::function<void()> runAudio;
+    std::function<void(const std::function<void()>&)> runAudio;   // tick(): call between audio blocks
     std::function<PanelBinding&()> binding;
     PanelDef def;
     std::vector<int> hidden;
@@ -127,21 +127,24 @@ int main(int argc, char** argv) {
     auto pvBind = bindPhantomVox(pv);
     std::vector<Job> jobs;
     jobs.push_back({"HEM_PHANTOM_VOX",
-                    [] { std::vector<float> l, r; vocal(l, r, 48000, 48000 * 3 - 19200);   // stop mid-phrase so the meters + analyzer show a live voice
-                         for (std::size_t p = 0; p < l.size(); p += 512) pv.process(l.data() + p, r.data() + p, int(std::min<std::size_t>(512, l.size() - p))); },
+                    [](const std::function<void()>& tick) { std::vector<float> l, r; vocal(l, r, 48000, 48000 * 3 - 19200);   // stop mid-phrase so the meters + analyzer show a live voice
+                         for (std::size_t p = 0; p < l.size(); p += 512) { pv.process(l.data() + p, r.data() + p, int(std::min<std::size_t>(512, l.size() - p))); tick(); } },
                     [&]() -> PanelBinding& { return *pvBind; }, phantomVoxPanel(), phantomVoxHidden()});
 
     // Shell engines: feed the same voice through the engine's stereo block process.
-    auto feedShell = [](auto& e) {
+    auto feedShell = [](auto& e, const std::function<void()>& tick) {
         std::vector<float> l, r;
-        vocal(l, r, 48000, 48000 * 3 - 19200);
-        for (std::size_t p = 0; p < l.size(); p += 512) e.process(l.data() + p, r.data() + p, int(std::min<std::size_t>(512, l.size() - p)));
+        vocal(l, r, 48000, 48000 * 5 - 19200);
+        for (std::size_t p = 0; p < l.size(); p += 512) {
+            e.process(l.data() + p, r.data() + p, int(std::min<std::size_t>(512, l.size() - p)));
+            tick();
+        }
     };
     static dm::sr::SyndicateRack rack;
     rack.prepare(48000, 512);
     rack.loadPreset(0);
     auto rackBind = bindSyndicate(rack);
-    jobs.push_back({"HEM_SYNDICATE_RACK", [&] { feedShell(rack); }, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden()});
+    jobs.push_back({"HEM_SYNDICATE_RACK", [&](const std::function<void()>& t) { feedShell(rack, t); }, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden()});
     static dm::sr::HemSat sSat; static dm::sr::HemComp sComp; static dm::sr::HemTransient sTrans;
     static dm::sr::HemTone sTone; static dm::sr::HemMod sMod; static dm::sr::HemMax sMax;
     sSat.prepare(48000, 512); sComp.prepare(48000, 512); sTrans.prepare(48000, 512);
@@ -149,30 +152,36 @@ int main(int argc, char** argv) {
     static auto bSat = bindSplit(sSat), bComp = bindSplit(sComp), bTrans = bindSplit(sTrans);
     static auto bTone = bindSplit(sTone), bMod = bindSplit(sMod), bMax = bindSplit(sMax);
     bSat->loadPreset(0); bComp->loadPreset(0); bTrans->loadPreset(2); bTone->loadPreset(0); bMod->loadPreset(12); bMax->loadPreset(1);
-    jobs.push_back({"HEM_SAT", [&] { feedShell(sSat); }, [&]() -> PanelBinding& { return *bSat; }, splitPanel(SplitKind::Sat), shellHidden()});
-    jobs.push_back({"HEM_COMP", [&] { feedShell(sComp); }, [&]() -> PanelBinding& { return *bComp; }, splitPanel(SplitKind::Comp), shellHidden()});
-    jobs.push_back({"HEM_TRANSIENT", [&] { feedShell(sTrans); }, [&]() -> PanelBinding& { return *bTrans; }, splitPanel(SplitKind::Transient), shellHidden()});
-    jobs.push_back({"HEM_TONE", [&] { feedShell(sTone); }, [&]() -> PanelBinding& { return *bTone; }, splitPanel(SplitKind::Tone), shellHidden()});
-    jobs.push_back({"HEM_MOD", [&] { feedShell(sMod); }, [&]() -> PanelBinding& { return *bMod; }, splitPanel(SplitKind::Mod), shellHidden()});
-    jobs.push_back({"HEM_MAX", [&] { feedShell(sMax); }, [&]() -> PanelBinding& { return *bMax; }, splitPanel(SplitKind::Max), shellHidden()});
+    jobs.push_back({"HEM_SAT", [&](const std::function<void()>& t) { feedShell(sSat, t); }, [&]() -> PanelBinding& { return *bSat; }, splitPanel(SplitKind::Sat), shellHidden()});
+    jobs.push_back({"HEM_COMP", [&](const std::function<void()>& t) { feedShell(sComp, t); }, [&]() -> PanelBinding& { return *bComp; }, splitPanel(SplitKind::Comp), shellHidden()});
+    jobs.push_back({"HEM_TRANSIENT", [&](const std::function<void()>& t) { feedShell(sTrans, t); }, [&]() -> PanelBinding& { return *bTrans; }, splitPanel(SplitKind::Transient), shellHidden()});
+    jobs.push_back({"HEM_TONE", [&](const std::function<void()>& t) { feedShell(sTone, t); }, [&]() -> PanelBinding& { return *bTone; }, splitPanel(SplitKind::Tone), shellHidden()});
+    jobs.push_back({"HEM_MOD", [&](const std::function<void()>& t) { feedShell(sMod, t); }, [&]() -> PanelBinding& { return *bMod; }, splitPanel(SplitKind::Mod), shellHidden()});
+    jobs.push_back({"HEM_MAX", [&](const std::function<void()>& t) { feedShell(sMax, t); }, [&]() -> PanelBinding& { return *bMax; }, splitPanel(SplitKind::Max), shellHidden()});
     static dm::ax::ApexCore apex;
     apex.prepare(48000, 512);
     static auto bApex = bindApex(apex);
     bApex->loadPreset(0);
-    jobs.push_back({"HEM_APEX_CORE", [&] { feedShell(apex); }, [&]() -> PanelBinding& { return *bApex; }, apexPanel(), shellHidden()});
+    jobs.push_back({"HEM_APEX_CORE", [&](const std::function<void()>& t) { feedShell(apex, t); }, [&]() -> PanelBinding& { return *bApex; }, apexPanel(), shellHidden()});
     static dm::il::IronLock iron;
     iron.prepare(48000, 512);
     static auto bIron = bindIronLock(iron);
     bIron->loadPreset(0);
-    jobs.push_back({"HEM_IRON_LOCK", [&] { feedShell(iron); }, [&]() -> PanelBinding& { return *bIron; }, ironLockPanel(), shellHidden()});
-    jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [] {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
+    jobs.push_back({"HEM_IRON_LOCK", [&](const std::function<void()>& t) { feedShell(iron, t); }, [&]() -> PanelBinding& { return *bIron; }, ironLockPanel(), shellHidden()});
+    static dm::rd::OutlawRider rider;
+    rider.prepare(48000, 512);
+    static auto bRider = bindRider(rider);
+    bRider->loadPreset(0);
+    jobs.push_back({"HEM_OUTLAW_RIDER", [&](const std::function<void()>& t) { feedShell(rider, t); }, [&]() -> PanelBinding& { return *bRider; }, riderPanel(), shellHidden()});
+    jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [](const std::function<void()>&) {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
 
     int failures = 0;
     for (auto& job : jobs) {
         const auto issues = checkLayout(job.def, job.binding(), job.hidden);
         for (const auto& is : issues) std::printf("LAYOUT %-18s %s\n", job.name.c_str(), is.what.c_str());
         if (!issues.empty()) ++failures;
-        job.runAudio();
+        PanelView view(job.def);
+        job.runAudio([&] { view.sample(job.binding()); });
 
         hc::ui::Renderer r;
         if (!r.init(4, &err) || !r.setParts(parts, &err)) { std::printf("FAIL %s renderer: %s\n", job.name.c_str(), err.c_str()); ++failures; continue; }
@@ -192,7 +201,6 @@ int main(int argc, char** argv) {
         r.endStatic();
         PanelController ctl(job.def, job.binding());
         if (job.menuCategory >= 0) ctl.openMenu(job.menuCategory);   // preset-browser view
-        PanelView view(job.def);
         r.beginFrame(canvas);
         view.draw(r, job.binding(), ctl);
         r.endFrameToCapture();

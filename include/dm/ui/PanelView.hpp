@@ -21,6 +21,9 @@ class PanelView {
 public:
     explicit PanelView(const PanelDef& def) : def_(def) {}
     void draw(hc::ui::Renderer& r, PanelBinding& b, const PanelController& c);
+    // Records one step of every scrolling display (Waveform). draw() calls it once per frame; the
+    // snapshot tool calls it while it plays audio so the picture shows a real history.
+    void sample(PanelBinding& b);
 
 private:
     void drawChassisLights(hc::ui::Renderer& r);
@@ -45,6 +48,10 @@ private:
     const PanelDef& def_;
     std::vector<float> feed_;
     std::vector<float> smooth_;   // per meter source, falls back smoothly
+    static constexpr std::size_t kHistory = 480;   // steps kept per scrolling display
+    std::vector<std::vector<float>> hist_;         // per widget: kHistory x 3 values, ring
+    std::vector<std::size_t> histPos_;
+    bool sampledThisFrame_ = false;
 };
 
 } // namespace dm::ui
