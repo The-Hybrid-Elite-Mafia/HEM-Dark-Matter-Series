@@ -314,4 +314,34 @@ inline constexpr float kKeyUpdateSec    = 0.5f;   // ASSUMED
 inline constexpr float kMajorProfile[12] = {6.35f, 2.23f, 3.48f, 2.33f, 4.38f, 4.09f, 2.52f, 5.19f, 2.39f, 3.66f, 2.29f, 2.88f};
 inline constexpr float kMinorProfile[12] = {6.33f, 2.68f, 3.52f, 5.38f, 2.60f, 3.53f, 2.54f, 4.75f, 3.98f, 2.69f, 3.34f, 3.17f};
 } // namespace il
+
+namespace rd { // ================================= HEM OUTLAW RIDER ========================================
+inline constexpr float kDefTarget       = -18.0f; // ASSUMED (dBFS RMS)
+inline constexpr float kDefMaxBoost     = 6.0f;   // ASSUMED
+inline constexpr float kDefMinCut       = 12.0f;  // ASSUMED
+inline constexpr float kDefSensitivity  = -50.0f; // ASSUMED: below this the rider holds (noise floor)
+inline constexpr float kSlowestMs       = 1500.0f;// ASSUMED: SPEED 0%
+inline constexpr float kFastestMs       = 20.0f;  // ASSUMED: SPEED 100%
+inline constexpr float kAutoGainWindowMs= 1500.0f;// ASSUMED: long window so riding (evening) survives auto-gain
+inline constexpr int   kDisplayHop      = 256;    // ASSUMED: one scrolling-display column per 256 samples
+} // namespace rd
+
+namespace d4 { // ================================ HEM DARK MATTER 4D ======================================
+inline constexpr float kDefReverb     = 25.0f;  // ASSUMED (protocol 20-35%)
+inline constexpr float kDefDecay      = 3.0f;   // ASSUMED
+inline constexpr float kDefDepth      = 50.0f;  // ASSUMED
+inline constexpr float kDefPredelay   = 20.0f;  // ASSUMED
+inline constexpr float kDefDucking    = 20.0f;  // ASSUMED
+inline constexpr float kDefShape      = 50.0f;  // ASSUMED
+inline constexpr float kDefDelay      = 20.0f;  // ASSUMED (protocol 20-35%)
+inline constexpr int   kDefTime       = 8;      // BRIEF (TIME 1/8d)
+inline constexpr float kDefFeedback   = 35.0f;  // ASSUMED
+inline constexpr float kColorLowHz    = 250.0f; // ASSUMED
+inline constexpr float kColorHighHz   = 6000.0f;// ASSUMED
+inline constexpr float kColorMaxDb    = 6.0f;   // ASSUMED
+inline constexpr float kDuckMaxDb     = 30.0f;  // ASSUMED
+inline constexpr float kDuckReleaseMinMs = 50.0f;   // ASSUMED: SHAPE 0%
+inline constexpr float kDuckReleaseMaxMs = 1500.0f; // ASSUMED: SHAPE 100%
+inline constexpr float kGrainWindowMs = 60.0f;  // ASSUMED: 400% MULTIPLIER grain size
+} // namespace d4
 } // namespace dm::assumed
