@@ -30,7 +30,7 @@ inline Box circleBox(float cx, float cy, float radius) { return {cx - radius, cy
 inline constexpr float kPlateW = 3840.0f, kPlateH = 2160.0f;
 
 enum class Accent : unsigned char { Cyan, Orange, Pink, Purple, Gold };
-enum class Icon : unsigned char { None, Wave, Ring, Atom, Tube, TubeXL, TapeReel, VuMeter, Keys, Max, Grid, Power, Bolt, Tv, Tunnel, Crosshair };
+enum class Icon : unsigned char { None, Wave, Ring, Atom, Tube, TubeXL, TapeReel, VuMeter, Keys, Max, Grid, Power, Bolt, Tv, Tunnel, Crosshair, KeyWhite, KeyBlack };
 
 // Displays: each kind reads its own live feed from the binding.
 enum class DisplayKind : unsigned char {

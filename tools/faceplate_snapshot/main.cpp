@@ -160,6 +160,11 @@ int main(int argc, char** argv) {
     static auto bApex = bindApex(apex);
     bApex->loadPreset(0);
     jobs.push_back({"HEM_APEX_CORE", [&] { feedShell(apex); }, [&]() -> PanelBinding& { return *bApex; }, apexPanel(), shellHidden()});
+    static dm::il::IronLock iron;
+    iron.prepare(48000, 512);
+    static auto bIron = bindIronLock(iron);
+    bIron->loadPreset(0);
+    jobs.push_back({"HEM_IRON_LOCK", [&] { feedShell(iron); }, [&]() -> PanelBinding& { return *bIron; }, ironLockPanel(), shellHidden()});
     jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [] {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
 
     int failures = 0;

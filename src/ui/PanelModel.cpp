@@ -95,7 +95,8 @@ std::vector<LayoutIssue> checkLayout(const PanelDef& def, const PanelBinding& b,
         for (std::size_t j = i + 1; j < def.widgets.size(); ++j) {
             const auto& a = def.widgets[i];
             const auto& c = def.widgets[j];
-            if (interactive(a.kind) && interactive(c.kind) && a.box.overlaps(c.box))
+            const bool keys = (a.icon == Icon::KeyWhite || a.icon == Icon::KeyBlack) && (c.icon == Icon::KeyWhite || c.icon == Icon::KeyBlack);
+            if (interactive(a.kind) && interactive(c.kind) && !keys && a.box.overlaps(c.box))
                 out.push_back({"controls overlap: '" + a.label + "' and '" + c.label + "'"});
         }
     return out;

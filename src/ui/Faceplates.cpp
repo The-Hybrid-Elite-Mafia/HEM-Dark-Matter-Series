@@ -122,6 +122,24 @@ std::unique_ptr<PanelBinding> bindApex(dm::ax::ApexCore& e) {
     return std::make_unique<EngineBinding<dm::ax::ApexCore>>(e, dm::ax::apexPresets(), meter, feed);
 }
 
+std::unique_ptr<PanelBinding> bindIronLock(dm::il::IronLock& e) {
+    auto meter = [](dm::il::IronLock& v, int s) -> float {
+        if (s == IlPitch) {   // detected note as a MIDI number, -1 when nothing is sung
+            const float hz = v.detectedHz();
+            return hz > 20.0f ? 69.0f + 12.0f * std::log2(hz / 440.0f) : -1.0f;
+        }
+        if (s == IlCorrection) return std::fabs(v.correctionCents());
+        return shellMeter(v, s);
+    };
+    auto feed = [](dm::il::IronLock& v, DisplayKind k, int, std::vector<float>& out) {
+        if (k != DisplayKind::NoteGrid || out.size() < 14) return;
+        for (int i = 0; i < 12; ++i) out[static_cast<std::size_t>(i)] = v.noteConfidence(i);
+        out[12] = static_cast<float>(v.detectedKey());
+        out[13] = static_cast<float>(v.activeScaleMask() & 0xFFFu);
+    };
+    return std::make_unique<EngineBinding<dm::il::IronLock>>(e, dm::il::ironLockPresets(), meter, feed);
+}
+
 std::vector<int> phantomVoxHidden() { return {dm::pv::AutoGainOn, dm::pv::Tempo}; }
 
 std::unique_ptr<PanelBinding> bindPhantomVox(dm::pv::PhantomVox& e) {

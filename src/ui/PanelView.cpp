@@ -1,6 +1,7 @@
 // HEM Dark Matter Series - faceplate drawing.
 #include "dm/ui/PanelView.hpp"
 
+#include "dm/ui/Feeds.hpp"
 #include "hybrid/ui/Parts.hpp"
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 
 namespace dm::ui {
 
+constexpr int IlPitchFeedId = IlPitch;
 using hc::ui::Align;
 using hc::ui::Blend;
 using hc::ui::Rect;
@@ -298,7 +300,8 @@ void PanelView::drawBay(Renderer& r, const Widget& w) {
         r.fillRound(pipe, 2.0f, c.withAlpha(0.75f), Blend::Over, true);
     }
     if (!w.label.empty()) {
-        const float maxW = w.screen.w > 0 && w.titleBase > w.screen.y - w.box.y ? w.screen.w - 40 : w.box.w - 300;
+        const float maxW = w.screen.w > 0 && w.titleBase > w.screen.y - w.box.y ? w.screen.w - 40
+                         : (w.screen.w > 0 ? w.box.w - 300 : w.box.w - 80);
         r.text(TextStyle::Tab, w.label, w.box.cx(), w.box.y + w.titleBase, c, Align::Center, TextFx::NeonCrisp, maxW);
     }
 }
@@ -463,6 +466,34 @@ void PanelView::drawButton(Renderer& r, PanelBinding& b, const Widget& w, bool h
         const Rgba ic = lit ? c : kTextDim.withAlpha(0.6f);
         r.arc(cx, cy + 2, rr, 6, 0.30f * kPi, 1.70f * kPi, ic, lit);
         r.fillRound({cx - 3, cy - rr - 3, 6, rr + 2}, 3, ic, Blend::Over, lit);
+        return;
+    }
+    if (w.icon == Icon::KeyWhite || w.icon == Icon::KeyBlack) {
+        // scale-lock key: LED lit = note allowed; key body glows while the singer is on this exact note
+        const bool white = w.icon == Icon::KeyWhite;
+        const Rect bx = R(w.box);
+        const float sung = b.meter(IlPitchFeedId);
+        const bool playing = sung >= 0.0f && static_cast<int>(std::lround(sung)) == w.source;
+        if (white) {
+            r.fillRound(bx, 8, rgb8(0x1A2230), Blend::Over);
+            r.fillRound({bx.x + 3, bx.y, bx.w - 6, bx.h - 4}, 7, rgb8(0x24324A), Blend::Over);
+            r.fillRound({bx.x + 6, bx.bottom() - 14, bx.w - 12, 8}, 4, {1, 1, 1, 0.05f}, Blend::Add);   // worn key lip
+        } else {
+            r.sprite(Sprite::DropShadow, {bx.x - 6, bx.y, bx.w + 18, bx.h + 18});
+            r.fillRound(bx, 7, rgb8(0x07090D), Blend::Over);
+            r.fillRound({bx.x + 5, bx.y, bx.w - 10, bx.h - 12}, 6, rgb8(0x141A24), Blend::Over);
+        }
+        if (playing) {
+            r.fillRound({bx.x + 8, bx.y + 6, bx.w - 16, bx.h * (white ? 0.55f : 0.7f)}, 6, c.withAlpha(0.85f), Blend::Over, true);
+            r.glow({bx.x + 8, bx.y + 6, bx.w - 16, bx.h * (white ? 0.55f : 0.7f)}, 6, 26, c.withAlpha(0.5f), true);
+        }
+        const float ly = bx.bottom() - (white ? 60.0f : 46.0f);
+        const float ls = white ? 15.0f : 12.0f;
+        r.fillRound({bx.cx() - ls, ly - ls, 2 * ls, 2 * ls}, 4, lit ? c : rgb8(0x2A3240), Blend::Over, lit);
+        if (lit) r.glow({bx.cx() - ls, ly - ls, 2 * ls, 2 * ls}, 4, 14, c.withAlpha(0.45f), true);
+        if (hot) r.glow(bx.inset(6), 8, 10, c.withAlpha(0.2f), true);
+        if (white && w.source % 12 == 0)   // octave marker on every C
+            r.text(TextStyle::Caption, "C" + std::to_string(w.source / 12 - 1), bx.cx(), bx.bottom() - 100, kTextDim, Align::Center);
         return;
     }
     if (w.label == "S") {   // small round solo button, ringed like the mockup's corner icons
@@ -830,6 +861,27 @@ void PanelView::drawDisplay(Renderer& r, PanelBinding& b, const Widget& w) {
         const float marks[3] = {100.0f, 1000.0f, 10000.0f};
         const char* names[3] = {"100", "1k", "10k"};
         for (int i = 0; i < 3; ++i) axisText(names[i], curveX(w.box, marks[i]), bx.bottom() - 30, Align::Center);
+    }
+    if (w.display == DisplayKind::NoteGrid) {
+        // 12 pitch-class cells: brightness = how sure the key detector is of that note; outlined = in the
+        // scale it settled on; line under it: the detected key
+        feed_.assign(14, 0.0f);
+        b.feed(DisplayKind::NoteGrid, w.source, feed_);
+        static const char* const kN[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+        const float cw = (bx.w - 50) / 4.0f, ch = 84.0f;
+        const auto mask = static_cast<std::uint32_t>(feed_[13]);
+        for (int i = 0; i < 12; ++i) {
+            const float x = bx.x + 25 + cw * static_cast<float>(i % 4), y = bx.y + 22 + (ch + 14) * static_cast<float>(i / 4);
+            const float conf = std::clamp(feed_[static_cast<std::size_t>(i)], 0.0f, 1.0f);
+            const Rect cell{x + 6, y, cw - 12, ch};
+            r.fillRound(cell, 8, rgb8(0x0C1016), Blend::Over);
+            if (conf > 0.02f) r.fillRound(cell, 8, c.withAlpha(0.15f + 0.7f * conf), Blend::Over, true);
+            if (mask & (1u << i)) r.fillRound({cell.x, cell.bottom() - 5, cell.w, 5}, 2, kAmber, Blend::Over, true);
+            r.text(TextStyle::Label, kN[i], cell.cx(), cell.cy() + 13, conf > 0.5f ? rgb8(0x061016) : kText, Align::Center);
+        }
+        const int key = static_cast<int>(std::lround(feed_[12]));
+        std::string kname = key < 0 ? "KEY: --" : std::string("KEY: ") + kN[key % 12] + (key >= 12 ? " MINOR" : " MAJOR");
+        r.text(TextStyle::Title, kname, bx.cx(), bx.bottom() - 26, key < 0 ? kTextDim : kAmber, Align::Center, TextFx::NeonCrisp, bx.w - 30);
     }
     if (w.display == DisplayKind::Transfer || w.display == DisplayKind::Tilt)
         if (!w.label.empty()) r.text(TextStyle::Caption, w.label, bx.right() - 18, bx.y + 34, c, Align::Right, TextFx::NeonCrisp);
