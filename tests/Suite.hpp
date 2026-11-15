@@ -35,7 +35,8 @@ struct SuiteCfg {
     std::size_t presetCount = 0;
     std::function<void(E&, std::size_t)> loadPreset;
     std::function<const char*(std::size_t)> presetName;
-    Ctx activeCtx;                             // settings that make the engine do something (for bypass/autogain checks)
+    Ctx activeCtx;
+    std::function<Stereo(float, double, double)> customSignal; // overrides vocal/music material when set                             // settings that make the engine do something (for bypass/autogain checks)
 };
 
 // Full-mix test signal: kick, snare, hats, bass and a chord pad at 120 BPM, peaks about `peakDb`.
@@ -85,7 +86,11 @@ template <class E>
 void runSuite(const SuiteCfg<E>& c) {
     constexpr float sr = 48000.0f;
     const double ceiling = std::pow(10.0, -0.1 / 20.0);
-    auto signal = [&](double secs, double pk) { return c.vocal ? vocalSignal(sr, secs, pk) : musicSignal(sr, secs, pk); };
+    auto signalAt = [&](float rate, double secs, double pk) {
+        if (c.customSignal) return c.customSignal(rate, secs, pk);
+        return c.vocal ? vocalSignal(rate, secs, pk) : musicSignal(rate, secs, pk);
+    };
+    auto signal = [&](double secs, double pk) { return signalAt(sr, secs, pk); };
     std::printf("\n################ %s ################\n", c.name);
 
     // ---- Unity / CPU hygiene -------------------------------------------------------------------------
@@ -282,7 +287,7 @@ void runSuite(const SuiteCfg<E>& c) {
     section("Sample rates 44.1 / 96 kHz: defaults safe");
     for (float rate : {44100.0f, 96000.0f}) {
         auto e = c.make(rate);
-        const auto in = c.vocal ? vocalSignal(rate, 6.0, -6.0) : musicSignal(rate, 6.0, -6.0);
+        const auto in = signalAt(rate, 6.0, -6.0);
         const auto out = render(*e, in, 480);
         const std::size_t from = std::size_t(rate * 3.0);
         const double d = kLoudnessDb(out, rate, from) - kLoudnessDb(in, rate, from);

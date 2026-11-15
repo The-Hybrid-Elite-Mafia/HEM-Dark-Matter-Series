@@ -294,4 +294,24 @@ inline constexpr float kBoostThreshDb   = -30.0f;// ASSUMED: upward stage works 
 inline constexpr float kColorLowHz      = 180.0f;// ASSUMED
 inline constexpr float kColorHighHz     = 5000.0f;// ASSUMED
 } // namespace ax
+
+namespace il { // ================================== HEM IRON LOCK =========================================
+inline constexpr float kRealtimeMinF0   = 100.0f; // ASSUMED: lowest pitch tracked in REALTIME mode
+inline constexpr float kHqMinF0         = 60.0f;  // ASSUMED: lowest pitch tracked in HQ mode
+inline constexpr float kMaxF0           = 1000.0f;// ASSUMED
+inline constexpr float kYinThreshold    = 0.15f;  // ASSUMED (standard YIN value)
+inline constexpr int   kHop             = 128;    // ASSUMED analysis hop (samples)
+inline constexpr float kUnvoicedGrainMs = 5.0f;   // ASSUMED grain period when no pitch is found
+inline constexpr float kDefStrength     = 80.0f;  // ASSUMED
+inline constexpr float kDefTransitionMs = 40.0f;  // ASSUMED
+inline constexpr float kDefSustain      = 50.0f;  // ASSUMED
+inline constexpr float kDefRangeCents   = 300.0f; // ASSUMED
+inline constexpr float kSustainMinMs    = 15.0f;  // ASSUMED: SUSTAIN 0% centre-pitch smoothing
+inline constexpr float kSustainMaxMs    = 400.0f; // ASSUMED: SUSTAIN 100% (keeps more vibrato)
+inline constexpr float kKeyMemorySec    = 8.0f;   // ASSUMED: QUANTUM KEY histogram memory
+inline constexpr float kKeyUpdateSec    = 0.5f;   // ASSUMED
+// Krumhansl-Kessler key profiles (published music-cognition data, used for key finding).
+inline constexpr float kMajorProfile[12] = {6.35f, 2.23f, 3.48f, 2.33f, 4.38f, 4.09f, 2.52f, 5.19f, 2.39f, 3.66f, 2.29f, 2.88f};
+inline constexpr float kMinorProfile[12] = {6.33f, 2.68f, 3.52f, 5.38f, 2.60f, 3.53f, 2.54f, 4.75f, 3.98f, 2.69f, 3.34f, 3.17f};
+} // namespace il
 } // namespace dm::assumed

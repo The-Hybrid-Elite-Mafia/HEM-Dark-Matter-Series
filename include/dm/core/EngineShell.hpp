@@ -69,9 +69,9 @@ public:
         autoGain_.prepare(sr_, self().autoGainWindowMs(), assumed::kAutoGainMaxDb);
         limiter_.prepare(sr_, assumed::kLimiterLookaheadMs, assumed::kLimiterReleaseMs);
         self().prepareCore(sr_);
-        const int lat = latencySamples();
-        for (auto& d : dryDelay_) d.prepare(lat + 8);
-        for (auto& d : refDelay_) d.prepare(self().coreLatency() + 8);
+        const int maxLat = self().maxCoreLatency() + limiter_.latency();
+        for (auto& d : dryDelay_) d.prepare(maxLat + 8);
+        for (auto& d : refDelay_) d.prepare(self().maxCoreLatency() + 8);
         for (PeakMeter* m : {&meters_.inL, &meters_.inR, &meters_.outL, &meters_.outR}) m->prepare(sr_, assumed::kChunk);
         reset();
     }
@@ -160,6 +160,7 @@ public:
     }
 
     // Hooks with defaults (override in Derived when needed).
+    [[nodiscard]] int maxCoreLatency() const noexcept { return self().coreLatency(); }
     [[nodiscard]] float autoGainWindowMs() const noexcept { return assumed::kAutoGainWindowMs; }
     void afterChunk(int) noexcept {}
 
