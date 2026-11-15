@@ -265,4 +265,33 @@ inline constexpr float kXoverHighDef   = 5200.0f;// BRIEF
 inline constexpr float kSoftClipKneeDb = -1.0f;  // ASSUMED
 
 } // namespace sr
+
+namespace ax { // ================================== HEM APEX CORE =========================================
+struct ApexEngineTune {
+    const char* name; float xoverLow, xoverHigh; float attackMs, releaseMs; float ratioMax;
+    float containDb; float boostDb; SatType sat; float satDrive; bool midSide; float airDb;
+};
+inline constexpr int kEngines = 6;
+inline constexpr ApexEngineTune kEngineTable[kEngines] = { // ASSUMED (all voicings; names BRIEF)
+    {"PRIMA",    200, 4000, 10.0f, 150.0f, 10.0f,  6.0f,  6.0f, SatType::Soft, 1.3f, false, 0.0f},
+    {"AIR-1B",   250, 6000,  5.0f, 120.0f,  8.0f,  6.0f,  5.0f, SatType::Soft, 1.2f, false, 1.5f},
+    {"MULTIMAX", 150, 3000,  2.0f,  80.0f, 16.0f, 10.0f,  4.0f, SatType::Odd,  1.4f, false, 0.0f},
+    {"HELIX",    200, 4500,  8.0f, 140.0f, 10.0f,  6.0f,  6.0f, SatType::Soft, 1.2f, true,  0.5f},
+    {"TITAN",    120, 2500,  1.0f,  60.0f, 20.0f,  8.0f,  8.0f, SatType::Odd,  2.0f, false, 0.0f},
+    {"VELVET",   300, 5000, 30.0f, 400.0f,  4.0f,  5.0f,  6.0f, SatType::Tube, 1.4f, false, 0.5f},
+};
+inline constexpr float kDefAmount    = 127.0f; // BRIEF
+inline constexpr float kDefContain   = 30.0f;  // ASSUMED (brief shows the arc, not a value)
+inline constexpr float kDefBoost     = 20.0f;  // ASSUMED
+inline constexpr float kDefPeaks     = 50.0f;  // BRIEF
+inline constexpr float kDefCurve     = 27.0f;  // BRIEF
+inline constexpr float kDefColorLow  = 23.0f;  // BRIEF
+inline constexpr float kDefColorHigh = 7.0f;   // BRIEF
+inline constexpr float kMonoSafeHz   = 120.0f; // ASSUMED
+inline constexpr float kAmountDrivePerUnitDb = 6.0f; // ASSUMED: each 100% above 100% adds 6 dB drive
+inline constexpr float kContainOffsetDb = 3.0f;  // ASSUMED: band may sit this far above the band average freely
+inline constexpr float kBoostThreshDb   = -30.0f;// ASSUMED: upward stage works below this band level
+inline constexpr float kColorLowHz      = 180.0f;// ASSUMED
+inline constexpr float kColorHighHz     = 5000.0f;// ASSUMED
+} // namespace ax
 } // namespace dm::assumed

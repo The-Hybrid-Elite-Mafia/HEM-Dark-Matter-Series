@@ -36,8 +36,12 @@ add_library(dm_syndicate STATIC
 target_include_directories(dm_syndicate PUBLIC include)
 target_link_libraries(dm_syndicate PUBLIC dm_build_flags)
 
+add_library(dm_apex STATIC src/apex/ApexCore.cpp)
+target_include_directories(dm_apex PUBLIC include)
+target_link_libraries(dm_apex PUBLIC dm_build_flags)
+
 # ---- Tests ---------------------------------------------------------------------------------------------
 enable_testing()
-add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp)
-target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate)
+add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp)
+target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex)
 add_test(NAME dm_tests COMMAND dm_tests)
