@@ -50,7 +50,6 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Faceplates inside a host window (open, draw, mouse wheel, close)
-        continue-on-error: true   # TEMPORARY while the one-process run is being diagnosed; result is in editor-report.txt
         shell: pwsh
         run: |
           $bundle = (Get-ChildItem build -Recurse -Directory -Filter 'HEM Dark Matter.vst3' | Where-Object { $_.FullName -match '\\Release\\' } | Select-Object -First 1).FullName
