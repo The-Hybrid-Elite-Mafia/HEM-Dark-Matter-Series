@@ -7,6 +7,7 @@
 #include "TestHarness.hpp"
 
 #include "dm/plugin/HostBinding.hpp"
+#include "dm/ui/PanelController.hpp"
 #include "dm/plugin/Registry.hpp"
 
 #include <cmath>
@@ -218,6 +219,39 @@ void testUndoPresetName() {
     check(b.currentPreset() == 1 && !b.modified(), "redo twice: next preset again, no *", b.currentPreset());
 }
 
+// INPUT / OUTPUT: the whole capsule (number, word, meter) turns the trim, and it covers no other control.
+void testTrimCapsules() {
+    section("INPUT / OUTPUT capsules grab the trims");
+    for (const auto& p : plugins()) {
+        auto e = p.create();
+        e->prepare(48000.0f, 512);
+        auto b = e->binding();
+        const auto def = p.panel();
+        const std::string n = p.name;
+        const dm::ui::Box wells[2] = {dm::ui::inputWell(def), dm::ui::outputWell(def)};
+        const int params[2] = {def.inputParam, def.outputParam};
+        const dm::ui::Box spots[2][2] = {{def.inputMeter, def.inputTrim}, {def.outputMeter, def.outputTrim}};
+        for (int k = 0; k < 2; ++k) {
+            int clash = 0;
+            for (const auto& w : def.widgets)
+                if (w.kind != dm::ui::Kind::Label && w.kind != dm::ui::Kind::Bay && w.box.overlaps(wells[k])) ++clash;
+            check(clash == 0, (n + (k ? ": OUTPUT" : ": INPUT") + " capsule covers no other control (count)").c_str(), clash);
+            for (const auto& spot : spots[k]) {
+                dm::ui::PanelController c(def, *b);
+                const float before = b->value(params[k]);
+                c.wheel(spot.cx(), spot.cy(), 3.0f, false);
+                check(b->value(params[k]) != before, (n + (k ? ": wheel on OUTPUT " : ": wheel on INPUT ") + (spot.x == spots[k][0].x ? "meter" : "number") + " turns the trim (dB)").c_str(), b->value(params[k]));
+                b->setValue(params[k], 0.0f);
+            }
+            dm::ui::PanelController c(def, *b);
+            const float wordX = k ? def.outputMeter.x - 120 : def.inputMeter.x - 70;
+            c.wheel(wordX, wells[k].cy(), -3.0f, false);
+            check(b->value(params[k]) < 0.0f, (n + (k ? ": wheel on the word OUTPUT" : ": wheel on the word INPUT") + " turns the trim (dB)").c_str(), b->value(params[k]));
+            b->setValue(params[k], 0.0f);
+        }
+    }
+}
+
 void testMetersRest() {
     section("IN A HOST: meters rest when audio stops");
     for (const auto& p : plugins()) {
@@ -250,4 +284,5 @@ void runPluginTests() {
     testHostBinding();
     testMetersRest();
     testUndoPresetName();
+    testTrimCapsules();
 }

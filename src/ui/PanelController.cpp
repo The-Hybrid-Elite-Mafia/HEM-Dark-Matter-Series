@@ -67,8 +67,8 @@ Hit PanelController::hitTest(float x, float y) const {
     if (hitBox(def_.presetSave, x, y)) return {Hit::T::PresetSave, -1};
     if (hitBox(def_.preset, x, y)) return {Hit::T::Preset, -1};
     if (hitBox(def_.bypass, x, y)) return {Hit::T::Bypass, -1};
-    if (hitBox(def_.inputTrim, x, y)) return {Hit::T::InTrim, -1};
-    if (hitBox(def_.outputTrim, x, y)) return {Hit::T::OutTrim, -1};
+    if (hitBox(def_.inputTrim, x, y) || hitBox(inputWell(def_), x, y)) return {Hit::T::InTrim, -1};
+    if (hitBox(def_.outputTrim, x, y) || hitBox(outputWell(def_), x, y)) return {Hit::T::OutTrim, -1};
     // Topmost widget wins: walk backwards (later widgets are drawn on top).
     for (int i = static_cast<int>(def_.widgets.size()) - 1; i >= 0; --i) {
         const Widget& w = def_.widgets[static_cast<std::size_t>(i)];

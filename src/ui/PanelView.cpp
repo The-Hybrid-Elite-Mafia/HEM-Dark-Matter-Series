@@ -92,8 +92,8 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
     }
     // recessed wells in the frame: preset strip, top buttons, input / output capsules
     wells.push_back({def.preset.x - 6, def.preset.y - 6, def.presetNext.r() - def.preset.x + 12, def.preset.h + 12});
-    wells.push_back({def.inputTrim.x - 30, plateH - 162, def.inputMeter.r() - def.inputTrim.x + 60, 114});
-    wells.push_back({def.outputMeter.x - 200, plateH - 162, def.outputTrim.r() - def.outputMeter.x + 230, 114});
+    wells.push_back(inputWell(def));
+    wells.push_back(outputWell(def));
     const std::array<std::array<float, 2>, 4> screws{{{194, 119}, {plateW - 194, 119}, {194, plateH - 120}, {plateW - 194, plateH - 120}}};
 
     auto grad = [](float (*sd)(float, float, const Box&, float), float x, float y, const Box& b, float rad, float& nx, float& ny) {

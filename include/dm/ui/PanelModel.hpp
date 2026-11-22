@@ -139,6 +139,14 @@ struct Track { float a, b; };
 [[nodiscard]] float curveRange(const Widget& w) noexcept;   // a display's / handle's +/- dB span (hi, default 12)
 // Visibility (Widget::showParam).
 [[nodiscard]] bool isShown(const Widget& w, const PanelBinding& b);
+// The INPUT / OUTPUT capsules in the bottom frame (number + label + meter). The whole capsule is the trim
+// knob's grab area, and the view draws its recessed well from the same box.
+[[nodiscard]] inline Box inputWell(const PanelDef& d) noexcept {
+    return {d.inputTrim.x - 30, d.h - 162, d.inputMeter.r() - d.inputTrim.x + 60, 114};
+}
+[[nodiscard]] inline Box outputWell(const PanelDef& d) noexcept {
+    return {d.outputMeter.x - 200, d.h - 162, d.outputTrim.r() - d.outputMeter.x + 230, 114};
+}
 
 // ---- Layout checks (used by tests and by the snapshot tool) -----------------------------------------
 struct LayoutIssue { std::string what; };
