@@ -51,6 +51,7 @@ PanelDef syndicatePanel() {
     d.widgets.push_back(display(DisplayKind::Panel, -1, {820, dy, 555, dh}, "", Accent::Pink));
     d.widgets.push_back(meter(SrGr, {880, 790, 50, 290}, "GR", Accent::Cyan, -24, 0, true));
     d.widgets.push_back(readout(P(kComp + CompModule::Sidechain), {990, 800, 360, 80}, "SIDECHAIN", Accent::Orange));
+    d.widgets.push_back(button(P(kComp + CompModule::ExtKey), {990, 895, 240, 66}, "EXT KEY", Accent::Pink));
     d.widgets.push_back(hmeter(SrTransient, {1000, 1000, 340, 26}, "TRANSIENT", Accent::Pink, -12, 12));
 
     // TONE display: analyzer + EQ curve with the six band handles

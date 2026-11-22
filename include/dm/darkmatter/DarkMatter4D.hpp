@@ -18,7 +18,7 @@ namespace a = dm::assumed::d4;
 inline constexpr const char* kRouteNames[3] = {"REV > DLY", "PARALLEL", "DLY > REV"};
 
 enum P : std::size_t {
-    Reverb = G_Count, Decay, Depth, Predelay, LowColor, HighColor, Routing, Ducking, Shape, Delay, Time, Feedback,
+    Reverb = G_Count, Decay, Depth, Predelay, LowColor, HighColor, Routing, Ducking, Shape, ExtKey, Delay, Time, Feedback,
     Multiplier, Tempo, kParamCount
 };
 
@@ -32,6 +32,7 @@ inline constexpr std::array<ParamDesc, std::size_t(kParamCount) - std::size_t(G_
     {"routing", "ROUTING", 0, 2, 1, "", std::span<const char* const>(kRouteNames)},
     {"ducking", "DUCKING", 0, 100, a::kDefDucking, "%"},
     {"shape", "SHAPE", 0, 100, a::kDefShape, "%"},
+    {"ext_key", "EXT KEY", 0, 1, 0, "toggle"},   // ducking follows the plug-in's sidechain input
     {"delay", "DELAY", 0, 100, a::kDefDelay, "%"},
     {"time", "TIME", 0, kSyncCount - 1, a::kDefTime, "", std::span<const char* const>(kSyncNames)},
     {"feedback", "FEEDBACK", 0, 95, a::kDefFeedback, "%"},
@@ -72,6 +73,7 @@ private:
     int route_ = 1;
     bool multiplier_ = false;
     float ducking_ = 0, shapeExp_ = 1;
+    bool extKey_ = false;
     float revFbL_ = 0, revFbR_ = 0, dlyFbL_ = 0, dlyFbR_ = 0;
     float duckMax_[2] = {0, 0}, revPk_ = 0, dlyPk_ = 0;
     std::array<std::atomic<float>, 2> duckPub_{};

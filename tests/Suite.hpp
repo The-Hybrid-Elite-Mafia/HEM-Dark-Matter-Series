@@ -36,6 +36,7 @@ struct SuiteCfg {
     std::function<void(E&, std::size_t)> loadPreset;
     std::function<const char*(std::size_t)> presetName;
     Ctx activeCtx;
+    std::function<Stereo(float, std::size_t)> keySignal;      // when set: every-control renders also feed this sidechain key
     std::function<Stereo(float, double, double)> customSignal; // overrides vocal/music material when set                             // settings that make the engine do something (for bypass/autogain checks)
 };
 
@@ -187,6 +188,8 @@ void runSuite(const SuiteCfg<E>& c) {
             for (auto [k, v] : ctx) e->params().set(k, v);
             e->params().set(id, value);
             e->reset();
+            if constexpr (requires(E& x) { x.setSidechain(nullptr, nullptr); })
+                if (c.keySignal) return renderKeyed(*e, in, c.keySignal(sr, in.size()));
             return render(*e, in);
         };
         for (std::size_t i = 0; i < proto->params().size(); ++i) {

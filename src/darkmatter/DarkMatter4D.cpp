@@ -23,6 +23,7 @@ void DarkMatter4D::updateCore(const float* v, const float* old, bool) noexcept {
     revMix_.setTarget(v[Reverb] * 0.01f);
     dlyMix_.setTarget(v[Delay] * 0.01f);
     if (!old) { revMix_.snap(revMix_.target); dlyMix_.snap(dlyMix_.target); } // reset / load: no fade-in
+    extKey_ = v[ExtKey] >= 0.5f;
     if (!changed(v, old, {Decay, Depth, Predelay, LowColor, HighColor, Routing, Ducking, Shape, Time, Feedback, Multiplier, Tempo}))
         return;
     const float depth = v[Depth] * 0.01f;
@@ -75,7 +76,8 @@ void DarkMatter4D::processCore(float& l, float& r) noexcept {
 
     float duckG[2] = {1.0f, 1.0f};
     if (ducking_ > 0.0f) {
-        const float in[2] = {l, r};
+        const float* key = extKey_ ? keyFrame() : nullptr;
+        const float in[2] = {key ? key[0] : l, key ? key[1] : r};
         for (std::size_t ch = 0; ch < 2; ++ch) {
             const float envDb = gainToDb(duckEnv_[ch].process(std::fabs(in[ch])));
             const float lvl = std::pow(clampf((envDb + 40.0f) / 34.0f, 0.0f, 1.0f), shapeExp_);

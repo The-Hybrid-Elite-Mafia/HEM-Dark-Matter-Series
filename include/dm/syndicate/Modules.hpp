@@ -64,20 +64,23 @@ private:
 // ===================================== COMP ============================================================
 class CompModule {
 public:
-    enum : std::size_t { Mode, Amount, Color, Sidechain, kN };
+    enum : std::size_t { Mode, Amount, Color, Sidechain, ExtKey, kN };
     static constexpr std::array<ParamDesc, kN> kParams = {{
         {"comp_mode", "DYNAMICS MODE", 0, a::kCompModes - 1, 1, "", C(kCompNames)},
         {"comp", "COMP", 0, 100, a::kCompDefault, "%"},
         {"color", "COLOR", 0, 100, a::kCompColorDefault, "%"},
         {"sidechain", "SIDECHAIN", 0, 100, a::kSidechainDefault, "%"},
+        {"ext_key", "EXT KEY", 0, 1, 0, "toggle"},   // detector listens to the plug-in's sidechain input
     }};
     void prepare(float sr);
     void reset() noexcept;
     void update(const float* v, const float* old) noexcept;
-    void process(float& l, float& r) noexcept;
+    // key: external sidechain frame {l, r} (nullptr = none); used only while EXT KEY is on.
+    void process(float& l, float& r, const float* key = nullptr) noexcept;
     [[nodiscard]] float grDb() const noexcept { return grPublished_; }
     void endChunk() noexcept { grPublished_ = grMax_; grMax_ = 0; }
 private:
+    bool extKey_ = false;
     float sr_ = 48000, thr_ = 0, ratio_ = 1, makeup_ = 0, colorMix_ = 0, colorDrive_ = 1, lastGr_ = 0;
     float optoFast_ = 0, optoSlow_ = 0, grMax_ = 0, grPublished_ = 0;
     const a::CompModeTune* m_ = &a::kCompModeTable[1];

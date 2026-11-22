@@ -36,7 +36,8 @@ PanelDef darkMatterPanel() {
     d.widgets.push_back(meter(DmDuckR, {2226, 880, 44, 960}, "R", Accent::Cyan, -24, 0, true));
     d.widgets.push_back(knob(P(Ducking), 1920, 1060, 145, Accent::Orange, "DUCKING"));
     d.widgets.push_back(display(DisplayKind::ShapeCurve, 0, {1690, 1330, 460, 300}, "", Accent::Orange));
-    d.widgets.push_back(knob(P(Shape), 1920, 1765, 62, Accent::Orange, "SHAPE", 0.7f));
+    d.widgets.push_back(knob(P(Shape), 1990, 1765, 62, Accent::Orange, "SHAPE", 0.7f));
+    d.widgets.push_back(button(P(ExtKey), {1650, 1730, 210, 70}, "EXT KEY", Accent::Orange));
 
     // ---- DELAY ----
     d.widgets.push_back(bay({2335, 250, 1340, 1700}, "", Accent::Orange));

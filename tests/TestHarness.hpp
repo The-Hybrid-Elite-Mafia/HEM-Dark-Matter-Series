@@ -114,6 +114,30 @@ Stereo render(Engine& e, const Stereo& in, int block = 256) {
     return out;
 }
 
+// Same, with an external sidechain key fed alongside each block.
+template <class Engine>
+Stereo renderKeyed(Engine& e, const Stereo& in, const Stereo& key, int block = 256) {
+    Stereo out = in;
+    for (std::size_t pos = 0; pos < out.size(); pos += std::size_t(block)) {
+        const int n = int(std::min<std::size_t>(std::size_t(block), out.size() - pos));
+        e.setSidechain(key.l.data() + pos, key.r.data() + pos);
+        e.process(out.l.data() + pos, out.r.data() + pos, n);
+    }
+    return out;
+}
+// Sidechain key: a 100 Hz tone pumping on and off 4 times a second at about -6 dBFS (nothing like the
+// test vocal / mix, so a detector that follows it behaves visibly differently).
+inline Stereo pulseKey(float sr, std::size_t n) {
+    Stereo k(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        const double t = double(i) / sr;
+        const double gate = std::fmod(t, 0.25) < 0.1 ? 1.0 : 0.0;
+        const float v = float(0.5 * gate * std::sin(6.283185307179586 * 100.0 * t));
+        k.l[i] = v; k.r[i] = v;
+    }
+    return k;
+}
+
 // K-weighted loudness of a stereo buffer in dB (same pre-filter as the engine's auto-gain).
 double kLoudnessDb(const Stereo& s, float sr, std::size_t from = 0);
 

@@ -89,8 +89,13 @@ public:
         bypassMix_.snap(bypassMix_.target);
     }
 
+    // External sidechain (key) for the NEXT process() call only: two buffers of numSamples, not trimmed,
+    // aligned with the input. nullptr = no key. Engines read it through keyFrame().
+    void setSidechain(const float* left, const float* right) noexcept { keyIn_[0] = left; keyIn_[1] = right; }
+
     void process(float* left, float* right, int numSamples) noexcept {
         ScopedNoDenormals noDenormals;
+        keyValid_ = keyIn_[0] != nullptr && keyIn_[1] != nullptr;
         ranCore_ = false;
         const int lat = latencySamples();
         const int coreLat = self().coreLatency();
@@ -115,6 +120,7 @@ public:
                 refDelay_[0].push(l);
                 refDelay_[1].push(r);
                 const float refL = refDelay_[0].read(coreLat), refR = refDelay_[1].read(coreLat);
+                if (keyValid_) { keyNow_[0] = keyIn_[0][i]; keyNow_[1] = keyIn_[1][i]; }
                 if (core) self().processCore(l, r);
                 else { l = refL; r = refR; }
 
@@ -140,9 +146,13 @@ public:
             self().afterChunk(n);
             pos += n;
         }
+        keyIn_[0] = keyIn_[1] = nullptr;   // a key is good for one call only
+        keyValid_ = false;
     }
 
     [[nodiscard]] int latencySamples() const noexcept { return self().coreLatency() + limiter_.latency(); }
+    // Current key frame {l, r} while process() runs with a sidechain, else nullptr.
+    [[nodiscard]] const float* keyFrame() const noexcept { return keyValid_ ? keyNow_ : nullptr; }
     [[nodiscard]] ParamSet<N>& params() noexcept { return params_; }
     [[nodiscard]] const ParamSet<N>& params() const noexcept { return params_; }
     [[nodiscard]] const ShellMeters& shellMeters() const noexcept { return meters_; }
@@ -194,6 +204,9 @@ protected:
     }
 
     ParamSet<N> params_;
+    const float* keyIn_[2]{};
+    float keyNow_[2]{};
+    bool keyValid_ = false;
     std::array<float, N> cached_{};
     float sr_ = 48000.0f;
     int maxBlock_ = 512;

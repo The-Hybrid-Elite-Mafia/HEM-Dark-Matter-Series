@@ -27,7 +27,7 @@ void SyndicateRack::processCore(float& l, float& r) noexcept {
     if (toneOn_ && route_ == 0) tone_.process(l, r);
     if (satOn_) sat_.process(l, r);
     if (dynOn_) {
-        comp_.process(l, r);
+        comp_.process(l, r, keyFrame());
         if (trans_.active()) trans_.process(l, r);
     }
     if (toneOn_ && route_ == 1) tone_.process(l, r);

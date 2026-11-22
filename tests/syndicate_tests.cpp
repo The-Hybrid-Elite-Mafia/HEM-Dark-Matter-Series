@@ -18,6 +18,7 @@ SuiteCfg<SyndicateRack> rackCfg() {
     c.overrides = {
         {kTrans + TransientModule::Shape, {{kTrans + TransientModule::Amount, 60}}},
         {kComp + CompModule::Sidechain, {{kComp + CompModule::Amount, 80}}},
+        {kComp + CompModule::ExtKey, {{kComp + CompModule::Amount, 80}}},
         {maxClip, {{maxMax, 100}}},
         {kRoute, {{kTone + ToneModule::Mid, 8}, {kComp + CompModule::Amount, 80}}},
         {kTone + ToneModule::Slope, {{kTone + ToneModule::Hpf, 200}}},
@@ -39,6 +40,7 @@ SuiteCfg<SyndicateRack> rackCfg() {
         {kMax + MaxModule::Mode, {{kMax + MaxModule::Multi, 80}}, "MAXIMIZE"},
         {maxClip, {{maxMax, 100}}, "CLIP"},
     };
+    c.keySignal = pulseKey;
     c.presetCount = rackPresets().size();
     c.loadPreset = [](SyndicateRack& e, std::size_t i) { e.loadPreset(i); };
     c.presetName = [](std::size_t i) { return rackPresets()[i].name.data(); };
@@ -157,6 +159,38 @@ void testOriginalFeatures() {
 
 } // namespace
 
+// EXT KEY: the compressor follows the sidechain input, not the track.
+void testSidechain() {
+    section("HEM SYNDICATE RACK - external sidechain (EXT KEY)");
+    const float sr = 48000.0f;
+    const auto in = musicSignal(sr, 3.0, -6.0);
+    const Stereo silent(in.size());
+    const auto loudKey = pulseKey(sr, in.size());
+    auto grWith = [&](bool ext, const Stereo* key) {
+        SyndicateRack e;
+        e.prepare(sr, 512);
+        e.params().set(kComp + CompModule::Amount, 80);
+        e.params().set(kComp + CompModule::ExtKey, ext ? 1.0f : 0.0f);
+        e.reset();
+        double grMax = 0;
+        Stereo out = in;
+        for (std::size_t pos = 0; pos < out.size(); pos += 256) {
+            const int n = int(std::min<std::size_t>(256, out.size() - pos));
+            if (key) e.setSidechain(key->l.data() + pos, key->r.data() + pos);
+            e.process(out.l.data() + pos, out.r.data() + pos, n);
+            grMax = std::max(grMax, double(std::fabs(e.grDb())));
+        }
+        return grMax;
+    };
+    const double internal = grWith(false, &silent), keySilent = grWith(true, &silent), keyLoud = grWith(true, &loudKey);
+    const double noKeyBus = grWith(true, nullptr);
+    check(internal > 3.0, "EXT KEY off: compresses on the track itself (max GR dB)", internal, "dB");
+    check(keySilent < 0.5, "EXT KEY on + silent key: no compression (max GR dB)", keySilent, "dB");
+    check(keyLoud > 3.0, "EXT KEY on + loud key: compresses (max GR dB)", keyLoud, "dB");
+    check(std::fabs(noKeyBus - internal) < 0.05, "EXT KEY on, host sends no sidechain: falls back to the track (GR diff dB)",
+          std::fabs(noKeyBus - internal), "dB");
+}
+
 void runSyndicateTests() {
     testOriginalFeatures();
     runSuite(rackCfg());
@@ -165,9 +199,15 @@ void runSyndicateTests() {
 
     runSuite(splitCfg<HemSat>("HEM SAT (split)", {},
         {{HemSat::kFirst + SatModule::Mode, {{HemSat::kFirst + SatModule::Amount, 80}}, "SATURATE"}}));
-    runSuite(splitCfg<HemComp>("HEM COMP (split)",
-        {{HemComp::kFirst + CompModule::Sidechain, {{HemComp::kFirst + CompModule::Amount, 80}}}},
-        {{HemComp::kFirst + CompModule::Mode, {{HemComp::kFirst + CompModule::Amount, 80}}, "DYNAMICS"}}));
+    {
+        auto c = splitCfg<HemComp>("HEM COMP (split)",
+            {{HemComp::kFirst + CompModule::Sidechain, {{HemComp::kFirst + CompModule::Amount, 80}}},
+             {HemComp::kFirst + CompModule::ExtKey, {{HemComp::kFirst + CompModule::Amount, 80}}}},
+            {{HemComp::kFirst + CompModule::Mode, {{HemComp::kFirst + CompModule::Amount, 80}}, "DYNAMICS"}});
+        c.keySignal = pulseKey;
+        runSuite(c);
+    }
+    testSidechain();
     {
         auto c = splitCfg<HemTransient>("HEM TRANSIENT (split)",
             {{HemTransient::kOn, {{HemTransient::kFirst + TransientModule::Amount, 60}}},

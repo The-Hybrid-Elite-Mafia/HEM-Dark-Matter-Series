@@ -66,6 +66,7 @@ PanelDef splitPanel(SplitKind k) {
         d.widgets.push_back(meter(SrGr, {1240, 800, 44, 470}, "GR", Accent::Cyan, -24, 0, true));
         d.widgets.push_back(meter(SrOut, {1400, 800, 56, 470}, "OUT", Accent::Cyan, -48, 0));
         d.widgets.push_back(meter(SrLimiter, {1560, 800, 44, 470}, "LIMIT", Accent::Orange, -12, 0, true));
+        d.widgets.push_back(button(F(CompModule::ExtKey), {1900, 820, 300, 84}, "EXT KEY", Accent::Pink));
         break;
     }
     case SplitKind::Transient: {

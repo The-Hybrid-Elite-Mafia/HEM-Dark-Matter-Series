@@ -73,6 +73,7 @@ void SatModule::endChunk() noexcept {
 void CompModule::prepare(float sr) { sr_ = sr; reset(); }
 void CompModule::reset() noexcept { env_.reset(); scHp_.reset(); lastGr_ = 0; grMax_ = 0; }
 void CompModule::update(const float* v, const float* old) noexcept {
+    extKey_ = v[ExtKey] >= 0.5f;
     if (!diff(v, old, {Mode, Amount, Color, Sidechain})) return;
     m_ = &a::kCompModeTable[pick(v[Mode], a::kCompModes)];
     const float amt = v[Amount] * 0.01f;
@@ -87,8 +88,9 @@ void CompModule::update(const float* v, const float* old) noexcept {
     colorDrive_ = 1.0f + (m_->satDrive - 1.0f) * 2.0f * c;
     scHp_.set(designBiquad(BiquadType::HighPass, expMap(v[Sidechain] * 0.01f, 20.0f, a::kSidechainMaxHz), 0.707f, 0, sr_));
 }
-void CompModule::process(float& l, float& r) noexcept {
-    const float sl = scHp_.process(0, l), sr = scHp_.process(1, r);
+void CompModule::process(float& l, float& r, const float* key) noexcept {
+    const bool ext = extKey_ && key != nullptr;
+    const float sl = scHp_.process(0, ext ? key[0] : l), sr = scHp_.process(1, ext ? key[1] : r);
     float level;
     if (m_->detector == 0) level = gainToDb(env_.process(std::max(std::fabs(sl), std::fabs(sr))));
     else {

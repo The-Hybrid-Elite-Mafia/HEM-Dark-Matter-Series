@@ -1,4 +1,5 @@
 #pragma once
+#include <type_traits>
 // =====================================================================================================
 //  HEM SYNDICATE RACK - 5-column analog console / mix-bus strip, plus its 6 standalone split plug-ins.
 //  Column order: SATURATE -> DYNAMICS (COMP + TRANSIENT) -> [TONE per ROUTING] -> MODULATE -> MAXIMIZE
@@ -117,7 +118,10 @@ public:
         on_ = v[kOn] >= 0.5f;
         m_.update(v + kFirst, old ? old + kFirst : nullptr);
     }
-    void processCore(float& l, float& r) noexcept { m_.process(l, r); }
+    void processCore(float& l, float& r) noexcept {
+        if constexpr (std::is_same_v<Module, CompModule>) m_.process(l, r, this->keyFrame());
+        else m_.process(l, r);
+    }
     [[nodiscard]] int coreLatency() const noexcept { return 0; }
     [[nodiscard]] float limiterLookaheadMs() const noexcept { return a::kZeroLatency ? 0.0f : assumed::kLimiterLookaheadMs; }
     [[nodiscard]] bool coreActive() const noexcept {

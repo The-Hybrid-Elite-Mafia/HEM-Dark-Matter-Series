@@ -96,12 +96,40 @@ void runRiderDarkMatterTests() {
         c.name = "HEM DARK MATTER 4D";
         c.make = [](float sr) { auto e = std::make_unique<DarkMatter4D>(); e->prepare(sr, 512); return e; };
         c.allOff = [](DarkMatter4D& e) { e.params().set(Reverb, 0); e.params().set(Delay, 0); };
-        c.overrides = {{Shape, {{Ducking, 80}}}};
+        c.overrides = {{Shape, {{Ducking, 80}}}, {ExtKey, {{Ducking, 80}, {Reverb, 50}}}};
+        c.keySignal = pulseKey;
         c.modes = {{Routing, {{Reverb, 50}, {Delay, 50}}, "ROUTING"}};
         c.presetCount = darkMatterPresets().size();
         c.loadPreset = [](DarkMatter4D& e, std::size_t i) { e.loadPreset(i); };
         c.presetName = [](std::size_t i) { return darkMatterPresets()[i].name.data(); };
         runSuite(c);
         darkMatterBehaviour();
+        // EXT KEY: the ducking follows the sidechain input
+        section("HEM DARK MATTER 4D - external sidechain (EXT KEY)");
+        const float sr = 48000.0f;
+        const auto in = vocalSignal(sr, 3.0, -6.0);
+        const Stereo silent(in.size());
+        const auto loudKey = pulseKey(sr, in.size());
+        auto duckWith = [&](bool ext, const Stereo& key) {
+            DarkMatter4D e;
+            e.prepare(sr, 512);
+            e.params().set(Ducking, 100);
+            e.params().set(Reverb, 50);
+            e.params().set(ExtKey, ext ? 1.0f : 0.0f);
+            e.reset();
+            double mx = 0;
+            Stereo out = in;
+            for (std::size_t pos = 0; pos < out.size(); pos += 256) {
+                const int n = int(std::min<std::size_t>(256, out.size() - pos));
+                e.setSidechain(key.l.data() + pos, key.r.data() + pos);
+                e.process(out.l.data() + pos, out.r.data() + pos, n);
+                mx = std::max(mx, double(std::fabs(e.duckDb(0))));
+            }
+            return mx;
+        };
+        const double internal = duckWith(false, silent), keySilent = duckWith(true, silent), keyLoud = duckWith(true, loudKey);
+        check(internal > 3.0, "EXT KEY off: ducks under the track itself (max duck dB)", internal, "dB");
+        check(keySilent < 0.5, "EXT KEY on + silent key: no ducking (max duck dB)", keySilent, "dB");
+        check(keyLoud > 3.0, "EXT KEY on + loud key: ducks (max duck dB)", keyLoud, "dB");
     }
 }
