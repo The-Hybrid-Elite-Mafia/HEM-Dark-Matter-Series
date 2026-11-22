@@ -215,18 +215,21 @@ void testEditor(Instance& in, const dm::plugin::PluginInfo& p) {
             if (wdg.kind != dm::ui::Kind::Knob || wdg.showParam >= 0 || !dm::plugin::hostVisible(p, std::size_t(wdg.param))) continue;
             const double before = in.controller->getParamNormalized(Vst::ParamID(wdg.param));
             const int x = int(wdg.box.cx() * scale), y = int(wdg.box.cy() * scale);
-            const int dy = before > 0.5 ? 60 : -60;   // up when low, down when high
-            stage("mouse down");
-            ::PostMessageW(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
-            pump(80);
-            stage("mouse drag");
-            for (int k = 1; k <= 6; ++k) { ::PostMessageW(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(x, y + dy * k / 6)); pump(40); }
-            stage("mouse up");
-            ::PostMessageW(child, WM_LBUTTONUP, 0, MAKELPARAM(x, y + dy));
+            const int dy = before > 0.5 ? 60 : -60;   // > 0: turn it down (it starts high)
+            // Mouse wheel over the knob (screen coordinates, as Windows sends them). Same path as a drag
+            // (window -> faceplate -> host edit) without the endless-drag cursor wrapping, which needs a
+            // real mouse on a real desktop.
+            stage("mouse wheel");
+            POINT pt{x, y};
+            ::ClientToScreen(child, &pt);
+            for (int k = 0; k < 4; ++k) {
+                ::PostMessageW(child, WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(static_cast<short>(dy > 0 ? -WHEEL_DELTA : WHEEL_DELTA))), MAKELPARAM(pt.x, pt.y));
+                pump(60);
+            }
             pump(120);
-            stage("after drag");
+            stage("after wheel");
             const double after = in.controller->getParamNormalized(Vst::ParamID(wdg.param));
-            check(std::fabs(after - before) > 1e-3, "mouse drag on " + wdg.label + " moves it (normalized change)", after - before);
+            check(std::fabs(after - before) > 1e-3, "mouse wheel on " + wdg.label + " moves it (normalized change)", after - before);
             break;
         }
     }
