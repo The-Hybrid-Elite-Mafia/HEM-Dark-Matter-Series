@@ -246,7 +246,7 @@ int main(int argc, char** argv) {
     const bool editor = argc > 2 && std::strcmp(argv[2], "--editor") == 0;
     const int only = argc > 3 ? std::atoi(argv[3]) : -1;   // --editor N: test only plug-in N (its editor in its own process)
 #if defined(_WIN32)
-    if (editor) startWatchdog(240);
+    if (editor) startWatchdog(only >= 0 ? 90 : 300);
 #endif
     std::string err;
     auto module = VST3::Hosting::Module::create(argv[1], err);
