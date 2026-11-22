@@ -4,11 +4,16 @@
 #  GCC/Clang are accepted only for developer test runs; releases come from MSVC CI.
 # =============================================================================
 cmake_minimum_required(VERSION 3.25)
-project(HEMDarkMatterSeries VERSION 0.1.0 LANGUAGES CXX)
+project(HEMDarkMatterSeries VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# Static MSVC runtime everywhere: the VST3 SDK is built with it, and the installed plug-in then needs no
+# separate Visual C++ runtime on the user's computer.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)   # static libraries go into the plug-in (a shared library)
+option(DM_BUILD_VST3 "Build the VST3 bundle (fetches the Steinberg VST3 SDK at configure time)" OFF)
 
 add_library(dm_build_flags INTERFACE)
 if(MSVC)
@@ -101,3 +106,8 @@ enable_testing()
 add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp tests/faceplate_tests.cpp tests/plugin_tests.cpp)
 target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker dm_ui_core dm_plugin_core)
 add_test(NAME dm_tests COMMAND dm_tests)
+
+# ---- VST3 bundle ---------------------------------------------------------------------------------------
+if(DM_BUILD_VST3)
+    add_subdirectory(plugin)
+endif()
