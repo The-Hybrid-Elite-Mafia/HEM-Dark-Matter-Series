@@ -1,0 +1,19 @@
+HEM Dark Matter Series - third-party parts
+==========================================
+
+HEM Dark Matter Series is free software under the GNU GPL version 3 (licenses\HEM-Dark-Matter-GPLv3.txt).
+It contains these parts made by others:
+
+1. Steinberg VST3 SDK 3.8.1 (the plug-in interface)
+   Licence: MIT. Copyright (c) Steinberg Media Technologies GmbH. Full text: licenses\Steinberg-VST3-SDK-LICENSE.txt
+   VST is a trademark of Steinberg Media Technologies GmbH.
+
+2. Barlow typeface (faceplate lettering)
+   Licence: SIL Open Font License 1.1. Copyright 2017 The Barlow Project Authors. Full text: licenses\Barlow-OFL.txt
+
+3. stb_image / stb_image_write / stb_truetype / stb_image_resize2 by Sean Barrett (faceplate pictures and fonts)
+   Licence: MIT or public domain (your choice). Full text: licenses\stb-LICENSE.txt
+
+4. The faceplate renderer comes from The Hybrid Core (same author, GPLv3).
+
+No other company's names, logos or artwork are used in these plug-ins.

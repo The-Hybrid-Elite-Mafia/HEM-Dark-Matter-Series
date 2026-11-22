@@ -1,0 +1,63 @@
+HEM DARK MATTER SERIES - HOW TO TEST
+====================================
+
+WHAT GOT INSTALLED
+  13 plug-ins, all in one file:  C:\Program Files\Common Files\VST3\HEM Dark Matter.vst3
+    HEM PHANTOM VOX        HEM SYNDICATE RACK     HEM APEX CORE        HEM IRON LOCK
+    HEM OUTLAW RIDER       HEM DARK MATTER 4D     HEM CHAINBREAKER 108
+    HEM SAT   HEM COMP   HEM TRANSIENT   HEM TONE   HEM MOD   HEM MAX   (the Syndicate split plug-ins)
+  They are VST3 plug-ins for Windows (64-bit). Any music program that loads VST3 can use them
+  (for example FL Studio, Ableton Live, Studio One, Cubase, Reaper, Bitwig).
+
+STEP 1 - QUICK SELF-TESTS (no music program needed)
+  Start menu > HEM Dark Matter > "Self-Test 1 - Engines"
+      Runs every engine test. The last line must say "... checks, 0 failed".
+  Start menu > HEM Dark Matter > "Self-Test 2 - Installed Plug-ins"
+      Loads the installed plug-in file the way a music program does and checks every plug-in.
+      The last line must say "... checks, 0 failed".
+
+STEP 2 - FIND THEM IN YOUR MUSIC PROGRAM
+  Most programs scan the VST3 folder on start. If they do not show up:
+    FL Studio:   Options > Manage plugins > Find more plugins
+    Ableton:     Preferences > Plug-ins > VST3 System Folder ON > Rescan
+    Studio One:  Options > Locations > VST Plug-ins > Reset Blocklist, restart
+    Reaper:      Options > Preferences > Plug-ins > VST > Re-scan
+  They are listed under the maker name "Hybrid Elite Mafia".
+
+STEP 3 - CHECK EACH ONE (about 1 minute per plug-in)
+  [ ] It opens and the faceplate looks like the pictures (dark metal, cyan / orange edge light).
+  [ ] Turn a knob: the sound changes and the value shows while you drag.
+  [ ] Double-click a knob: it goes back to its default.
+  [ ] Hold Shift (or Ctrl) while dragging: fine adjustment.
+  [ ] BYPASS (top right): sound goes back to dry, no click, no level jump.
+  [ ] Preset box (top): click it, pick a preset, the knobs move.
+  [ ] "+" next to the presets: saves your settings as "User 1", "User 2"...
+      (they stay after closing the program: Start menu > "My Presets Folder")
+  [ ] Undo / redo arrows work.
+  [ ] Meters move with the music.
+  [ ] Save your song, close, open it again: the settings come back exactly.
+
+SIDECHAIN (EXT KEY) - HEM SYNDICATE RACK, HEM COMP, HEM DARK MATTER 4D
+  1. Route another track (for example the kick, or the lead vocal) to the plug-in's sidechain input.
+     Every music program does this a little differently and the menu names change between versions,
+     so search "<your program> VST3 sidechain" if you are not sure. The plug-in's second input is
+     called "Sidechain".
+  2. Turn EXT KEY on.
+  3. The compressor (or Dark Matter's ducking) now follows that other track, not the track it is on.
+  With EXT KEY off, or with nothing routed, it works on its own track as normal.
+
+HEM IRON LOCK - REALTIME / HQ
+  REALTIME: low delay for recording through it.  HQ: better quality for mixing (more delay).
+  The music program is told about the change in delay so tracks stay lined up.
+
+KNOWN LIMITS (honest list)
+  - Windows only. No Mac (AU) version and no Pro Tools (AAX) version yet.
+  - The installer is not code-signed: Windows SmartScreen may say "Windows protected your PC".
+    Click "More info" then "Run anyway".
+  - The faceplate size is fixed (it fits the screen it opens on; it does not stretch).
+  - Live meters need the music program to run the plug-in's two halves in the same process. All the
+    usual programs do. If a program does not, the plug-in still works; only the meters stay still.
+
+IF SOMETHING IS WRONG
+  Write down: the plug-in name, the music program, what you did, what happened.
+  A phone photo of the screen helps.

@@ -7,8 +7,10 @@ on:
 
 jobs:
   test:
-    name: Build + quality-gate tests (MSVC Release, x64)
+    name: Build + tests + VST3 bundle + installer (MSVC Release, x64)
     runs-on: windows-2022
+    permissions:
+      contents: write   # publish the installer as a GitHub Release (main only)
     steps:
       - uses: actions/checkout@v5
 
@@ -20,7 +22,7 @@ jobs:
           (Get-CimInstance Win32_Processor).Name
 
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DDM_BUILD_VST3=ON
 
       - name: Build Release
         run: cmake --build build --config Release --parallel
@@ -55,3 +57,39 @@ jobs:
           path: |
             faceplates/*.png
             faceplate-report.txt
+
+      - name: Build installer
+        shell: pwsh
+        run: ./tools/ci/build-installer.ps1
+
+      - name: Verify installer (install, installed plug-in test, upgrade, uninstall)
+        shell: pwsh
+        run: ./tools/ci/verify-installer.ps1 -Installer "$env:DM_INSTALLER"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: HEM-Dark-Matter-Setup-${{ env.DM_VERSION }}
+          path: installer/output/*.exe
+
+      - name: Publish download (GitHub Release, main only)
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v$($env:DM_VERSION)-build.$($env:GITHUB_RUN_NUMBER)"
+          $notes = @"
+          HEM Dark Matter Series $($env:DM_VERSION), build $($env:GITHUB_RUN_NUMBER) (commit $($env:GITHUB_SHA.Substring(0,7))).
+
+          All 13 plug-ins as VST3 for Windows 64-bit, in one installer.
+          Built and checked on GitHub's Windows machine: engine tests, faceplate tests, Steinberg's VST3 validator,
+          the test host on the built and on the installed plug-in, install / upgrade / uninstall.
+
+          How to test: after installing, open Start menu > HEM Dark Matter > How to test.
+          Not code-signed: Windows may say "Windows protected your PC" - click More info, then Run anyway.
+
+          SHA-256 of the installer: $($env:DM_SHA256)
+          "@
+          gh release create $tag "$env:DM_INSTALLER" --repo $env:GITHUB_REPOSITORY --prerelease --title "HEM Dark Matter $($env:DM_VERSION) (build $($env:GITHUB_RUN_NUMBER))" --notes $notes
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed ($LASTEXITCODE)" }
