@@ -28,6 +28,7 @@
 #endif
 
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <atomic>
 #include <chrono>
@@ -243,6 +244,7 @@ void testEditor(Instance& in, const dm::plugin::PluginInfo& p) {
 int main(int argc, char** argv) {
     if (argc < 2) { std::printf("usage: dm_vst3_hosttest <HEM Dark Matter.vst3> [--editor]\n"); return 2; }
     const bool editor = argc > 2 && std::strcmp(argv[2], "--editor") == 0;
+    const int only = argc > 3 ? std::atoi(argv[3]) : -1;   // --editor N: test only plug-in N (its editor in its own process)
 #if defined(_WIN32)
     if (editor) startWatchdog(240);
 #endif
@@ -255,7 +257,10 @@ int main(int argc, char** argv) {
     const auto src = music(std::size_t(kSr * 1.5));
     const auto key = pulse(src.l.size());
 
+    int index = -1;
     for (const auto& p : dm::plugin::plugins()) {
+        ++index;
+        if (only >= 0 && index != only) continue;
         std::printf("== %s ==\n", p.name);
         std::optional<VST3::Hosting::ClassInfo> foundInfo;
         for (const auto& ci : factory.classInfos())   // classInfos() returns a temporary list: keep a copy
