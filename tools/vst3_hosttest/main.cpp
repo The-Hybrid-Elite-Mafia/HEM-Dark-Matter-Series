@@ -29,7 +29,10 @@
 
 #include <cmath>
 #include <cstring>
+#include <atomic>
+#include <chrono>
 #include <optional>
+#include <thread>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -152,11 +155,26 @@ Audio direct(const dm::plugin::PluginInfo& p, const Audio& src, const std::vecto
 }
 
 #if defined(_WIN32)
+// Watchdog: a stuck editor must fail the test, not hang the build.
+std::atomic<const char*> gStage{"start"};
+void startWatchdog(int seconds) {
+    std::thread([seconds] {
+        std::this_thread::sleep_for(std::chrono::seconds(seconds));
+        std::printf("  [FAIL] TIMEOUT: editor test stuck at: %s\n", gStage.load());
+        std::fflush(stdout);
+        std::_Exit(3);
+    }).detach();
+}
+void stage(const char* s) { gStage = s; }
+
 void pump(int ms) {
     const DWORD until = ::GetTickCount() + static_cast<DWORD>(ms);
     MSG m;
     while (::GetTickCount() < until) {
-        while (::PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) { ::TranslateMessage(&m); ::DispatchMessageW(&m); }
+        for (int guard = 0; guard < 200 && ::PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE); ++guard) {
+            ::TranslateMessage(&m);
+            ::DispatchMessageW(&m);
+        }
         ::Sleep(5);
     }
 }
@@ -182,7 +200,9 @@ void testEditor(Instance& in, const dm::plugin::PluginInfo& p) {
     check(w >= 320 && h >= 200, "editor size (width px)", w);
     HWND parent = ::CreateWindowExW(0, L"DmHostTestParent", L"host", WS_OVERLAPPEDWINDOW, 0, 0, w + 40, h + 60, nullptr, nullptr,
                                     ::GetModuleHandleW(nullptr), nullptr);
+    stage("attach");
     check(view->attached(parent, kPlatformTypeHWND) == kResultOk, "opens inside the host window");
+    stage("first frames");
     pump(400);
     HWND child = ::FindWindowExW(parent, nullptr, L"HEMPluginGlView", nullptr);
     check(child != nullptr, "faceplate window is up (art loaded, OpenGL running)");
@@ -195,18 +215,24 @@ void testEditor(Instance& in, const dm::plugin::PluginInfo& p) {
             const double before = in.controller->getParamNormalized(Vst::ParamID(wdg.param));
             const int x = int(wdg.box.cx() * scale), y = int(wdg.box.cy() * scale);
             const int dy = before > 0.5 ? 60 : -60;   // up when low, down when high
-            ::SendMessageW(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+            stage("mouse down");
+            ::PostMessageW(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
             pump(80);
-            for (int k = 1; k <= 6; ++k) { ::SendMessageW(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(x, y + dy * k / 6)); pump(40); }
-            ::SendMessageW(child, WM_LBUTTONUP, 0, MAKELPARAM(x, y + dy));
+            stage("mouse drag");
+            for (int k = 1; k <= 6; ++k) { ::PostMessageW(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(x, y + dy * k / 6)); pump(40); }
+            stage("mouse up");
+            ::PostMessageW(child, WM_LBUTTONUP, 0, MAKELPARAM(x, y + dy));
             pump(120);
+            stage("after drag");
             const double after = in.controller->getParamNormalized(Vst::ParamID(wdg.param));
             check(std::fabs(after - before) > 1e-3, "mouse drag on " + wdg.label + " moves it (normalized change)", after - before);
             break;
         }
     }
+    stage("close");
     view->removed();
     pump(50);
+    stage("closed");
     check(::FindWindowExW(parent, nullptr, L"HEMPluginGlView", nullptr) == nullptr, "closes cleanly");
     ::DestroyWindow(parent);
 }
@@ -217,6 +243,9 @@ void testEditor(Instance& in, const dm::plugin::PluginInfo& p) {
 int main(int argc, char** argv) {
     if (argc < 2) { std::printf("usage: dm_vst3_hosttest <HEM Dark Matter.vst3> [--editor]\n"); return 2; }
     const bool editor = argc > 2 && std::strcmp(argv[2], "--editor") == 0;
+#if defined(_WIN32)
+    if (editor) startWatchdog(240);
+#endif
     std::string err;
     auto module = VST3::Hosting::Module::create(argv[1], err);
     if (!module) { std::printf("FAIL cannot load %s: %s\n", argv[1], err.c_str()); return 1; }
