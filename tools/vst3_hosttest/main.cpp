@@ -168,6 +168,24 @@ void startWatchdog(int seconds) {
 }
 void stage(const char* s) { gStage = s; }
 
+// Crash reporter: if anything crashes (also while the program shuts down), print where - which file
+// (plug-in, OpenGL driver, Windows) and the offset inside it - so a crash is never silent.
+DWORD gMainThread = 0;
+LONG WINAPI crashReport(EXCEPTION_POINTERS* ep) {
+    const void* at = ep->ExceptionRecord->ExceptionAddress;
+    HMODULE mod = nullptr;
+    char file[MAX_PATH] = "(unknown file)";
+    if (::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                             static_cast<LPCSTR>(at), &mod) && mod)
+        ::GetModuleFileNameA(mod, file, MAX_PATH);
+    std::printf("  [FAIL] CRASH code 0x%08lX in %s at offset 0x%llX (%s thread), last step: %s\n",
+                static_cast<unsigned long>(ep->ExceptionRecord->ExceptionCode), file,
+                static_cast<unsigned long long>(reinterpret_cast<const char*>(at) - reinterpret_cast<const char*>(mod)),
+                ::GetCurrentThreadId() == gMainThread ? "main" : "other", gStage.load());
+    std::fflush(stdout);
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
 void pump(int ms) {
     const DWORD until = ::GetTickCount() + static_cast<DWORD>(ms);
     MSG m;
@@ -249,7 +267,10 @@ int main(int argc, char** argv) {
     const bool editor = argc > 2 && std::strcmp(argv[2], "--editor") == 0;
     const int only = argc > 3 ? std::atoi(argv[3]) : -1;   // --editor N: test only plug-in N (its editor in its own process)
 #if defined(_WIN32)
-    if (editor) startWatchdog(only >= 0 ? 90 : 300);
+    gMainThread = ::GetCurrentThreadId();
+    ::SetUnhandledExceptionFilter(crashReport);
+    // ~50 s per editor with software OpenGL on the build machine: time limit grows with the plug-in count
+    if (editor) startWatchdog(only >= 0 ? 120 : 120 * 13);
 #endif
     std::string err;
     auto module = VST3::Hosting::Module::create(argv[1], err);
@@ -362,5 +383,9 @@ int main(int argc, char** argv) {
         close(a); close(b); close(c);
     }
     std::printf("%d checks, %d failed\n", checks, failures);
+    std::fflush(stdout);
+#if defined(_WIN32)
+    stage("shutting down (plug-in file unloads)");
+#endif
     return failures == 0 ? 0 : 1;
 }
