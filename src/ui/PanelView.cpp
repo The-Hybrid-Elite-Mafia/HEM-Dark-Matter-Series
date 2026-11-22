@@ -69,15 +69,15 @@ Rgba accentColour(Accent a) noexcept {
 //  Static plate (CPU)
 // =====================================================================================================
 hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
-    const float kPlateW = def.w, kPlateH = def.h;   // this plate's own size
+    const float plateW = def.w, plateH = def.h;   // this plate's own size
     hc::ui::Image img;
-    img.width = static_cast<std::uint32_t>(std::lround(kPlateW * ppu));
-    img.height = static_cast<std::uint32_t>(std::lround(kPlateH * ppu));
+    img.width = static_cast<std::uint32_t>(std::lround(plateW * ppu));
+    img.height = static_cast<std::uint32_t>(std::lround(plateH * ppu));
     img.rgba.assign(static_cast<std::size_t>(img.width) * img.height * 4, 0);
     // Heavy machined frame -> raised inner lip -> recessed brushed field that carries the bays.
-    const Box frame{8, 8, kPlateW - 16, kPlateH - 16};
-    const Box lip{70, 40, kPlateW - 140, kPlateH - 80};
-    const Box field{118, 222, kPlateW - 236, kPlateH - 408};
+    const Box frame{8, 8, plateW - 16, plateH - 16};
+    const Box lip{70, 40, plateW - 140, plateH - 80};
+    const Box field{118, 222, plateW - 236, plateH - 408};
     std::vector<Box> bays, plates, glass, wells;
     for (const auto& w : def.widgets) {
         if (w.kind == Kind::Bay) {
@@ -92,9 +92,9 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
     }
     // recessed wells in the frame: preset strip, top buttons, input / output capsules
     wells.push_back({def.preset.x - 6, def.preset.y - 6, def.presetNext.r() - def.preset.x + 12, def.preset.h + 12});
-    wells.push_back({def.inputTrim.x - 30, kPlateH - 162, def.inputMeter.r() - def.inputTrim.x + 60, 114});
-    wells.push_back({def.outputMeter.x - 200, kPlateH - 162, def.outputTrim.r() - def.outputMeter.x + 230, 114});
-    const std::array<std::array<float, 2>, 4> screws{{{194, 119}, {kPlateW - 194, 119}, {194, kPlateH - 120}, {kPlateW - 194, kPlateH - 120}}};
+    wells.push_back({def.inputTrim.x - 30, plateH - 162, def.inputMeter.r() - def.inputTrim.x + 60, 114});
+    wells.push_back({def.outputMeter.x - 200, plateH - 162, def.outputTrim.r() - def.outputMeter.x + 230, 114});
+    const std::array<std::array<float, 2>, 4> screws{{{194, 119}, {plateW - 194, 119}, {194, plateH - 120}, {plateW - 194, plateH - 120}}};
 
     auto grad = [](float (*sd)(float, float, const Box&, float), float x, float y, const Box& b, float rad, float& nx, float& ny) {
         const float e = 0.75f;
@@ -115,7 +115,7 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
             float nx, ny;
             if (dLip > 0.0f) {
                 // outer frame: dark anodised gunmetal, rolled outer edge
-                L = 0.008f + 0.007f * brushed(ux * 0.6f, uy) + 0.005f * (1.0f - uy / kPlateH);
+                L = 0.008f + 0.007f * brushed(ux * 0.6f, uy) + 0.005f * (1.0f - uy / plateH);
                 grad(sdRound, ux, uy, frame, 120, nx, ny);
                 const float roll = std::clamp(1.0f + dF / 40.0f, 0.0f, 1.0f);
                 L += 0.24f * roll * roll * std::max(0.0f, bevelLight(-nx, -ny)) + 0.02f * roll;
@@ -143,7 +143,7 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
                 }
             } else {
                 // recessed field: dark brushed charcoal with a soft vertical sheen
-                const float sheen = std::exp(-std::pow((ux - kPlateW * 0.5f) / 1400.0f, 2.0f));
+                const float sheen = std::exp(-std::pow((ux - plateW * 0.5f) / 1400.0f, 2.0f));
                 L = 0.0055f + 0.0035f * brushed(ux, uy) + 0.003f * sheen;
                 L *= 0.6f + 0.4f * std::clamp(-dFld / 30.0f, 0.0f, 1.0f);       // shadow at the recess wall
                 for (const Box& b : bays) {

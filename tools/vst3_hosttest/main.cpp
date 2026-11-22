@@ -6,7 +6,9 @@
 //   4. a saved state loads into a fresh instance and gives the same sound;
 //   5. plug-ins with EXT KEY: switched on and fed a key on the sidechain input, they follow the key;
 //   6. HEM IRON LOCK: switching REALTIME -> HQ changes the delay the plug-in reports.
-// Usage: dm_vst3_hosttest "<path to HEM Dark Matter.vst3>"     exit code 0 = all passed
+//   7. (Windows, --editor) its faceplate opens inside a host window, keeps drawing, and a mouse drag on
+//      a knob changes that parameter in the controller.
+// Usage: dm_vst3_hosttest "<path to HEM Dark Matter.vst3>" [--editor]     exit code 0 = all passed
 #include "dm/core/EngineShell.hpp"
 #include "dm/plugin/Registry.hpp"
 
@@ -20,7 +22,13 @@
 #include "public.sdk/source/vst/hosting/plugprovider.h"
 #include "public.sdk/source/vst/hosting/processdata.h"
 
+#if defined(_WIN32)
+#include "pluginterfaces/gui/iplugview.h"
+#include <windows.h>
+#endif
+
 #include <cmath>
+#include <cstring>
 #include <optional>
 #include <cstdio>
 #include <string>
@@ -143,10 +151,72 @@ Audio direct(const dm::plugin::PluginInfo& p, const Audio& src, const std::vecto
     return out;
 }
 
+#if defined(_WIN32)
+void pump(int ms) {
+    const DWORD until = ::GetTickCount() + static_cast<DWORD>(ms);
+    MSG m;
+    while (::GetTickCount() < until) {
+        while (::PeekMessageW(&m, nullptr, 0, 0, PM_REMOVE)) { ::TranslateMessage(&m); ::DispatchMessageW(&m); }
+        ::Sleep(5);
+    }
+}
+LRESULT CALLBACK parentProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) { return ::DefWindowProcW(h, msg, wp, lp); }
+
+void testEditor(Instance& in, const dm::plugin::PluginInfo& p) {
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSW wc{};
+        wc.lpfnWndProc = parentProc;
+        wc.hInstance = ::GetModuleHandleW(nullptr);
+        wc.lpszClassName = L"DmHostTestParent";
+        ::RegisterClassW(&wc);
+        registered = true;
+    }
+    IPtr<IPlugView> view = owned(in.controller->createView(Vst::ViewType::kEditor));
+    check(view != nullptr, "has an editor (faceplate)");
+    if (!view) return;
+    check(view->isPlatformTypeSupported(kPlatformTypeHWND) == kResultTrue, "editor runs in a Windows host window");
+    ViewRect r;
+    view->getSize(&r);
+    const int w = r.getWidth(), h = r.getHeight();
+    check(w >= 320 && h >= 200, "editor size (width px)", w);
+    HWND parent = ::CreateWindowExW(0, L"DmHostTestParent", L"host", WS_OVERLAPPEDWINDOW, 0, 0, w + 40, h + 60, nullptr, nullptr,
+                                    ::GetModuleHandleW(nullptr), nullptr);
+    check(view->attached(parent, kPlatformTypeHWND) == kResultOk, "opens inside the host window");
+    pump(400);
+    HWND child = ::FindWindowExW(parent, nullptr, L"HEMPluginGlView", nullptr);
+    check(child != nullptr, "faceplate window is up (art loaded, OpenGL running)");
+    if (child) {
+        // drag the first always-visible knob upwards and watch the controller value move
+        const auto def = p.panel();
+        const float scale = float(w) / def.w;
+        for (const auto& wdg : def.widgets) {
+            if (wdg.kind != dm::ui::Kind::Knob || wdg.showParam >= 0 || !dm::plugin::hostVisible(p, std::size_t(wdg.param))) continue;
+            const double before = in.controller->getParamNormalized(Vst::ParamID(wdg.param));
+            const int x = int(wdg.box.cx() * scale), y = int(wdg.box.cy() * scale);
+            const int dy = before > 0.5 ? 60 : -60;   // up when low, down when high
+            ::SendMessageW(child, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(x, y));
+            pump(80);
+            for (int k = 1; k <= 6; ++k) { ::SendMessageW(child, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(x, y + dy * k / 6)); pump(40); }
+            ::SendMessageW(child, WM_LBUTTONUP, 0, MAKELPARAM(x, y + dy));
+            pump(120);
+            const double after = in.controller->getParamNormalized(Vst::ParamID(wdg.param));
+            check(std::fabs(after - before) > 1e-3, "mouse drag on " + wdg.label + " moves it (normalized change)", after - before);
+            break;
+        }
+    }
+    view->removed();
+    pump(50);
+    check(::FindWindowExW(parent, nullptr, L"HEMPluginGlView", nullptr) == nullptr, "closes cleanly");
+    ::DestroyWindow(parent);
+}
+#endif
+
 } // namespace
 
 int main(int argc, char** argv) {
-    if (argc < 2) { std::printf("usage: dm_vst3_hosttest <HEM Dark Matter.vst3>\n"); return 2; }
+    if (argc < 2) { std::printf("usage: dm_vst3_hosttest <HEM Dark Matter.vst3> [--editor]\n"); return 2; }
+    const bool editor = argc > 2 && std::strcmp(argv[2], "--editor") == 0;
     std::string err;
     auto module = VST3::Hosting::Module::create(argv[1], err);
     if (!module) { std::printf("FAIL cannot load %s: %s\n", argv[1], err.c_str()); return 1; }
@@ -247,6 +317,11 @@ int main(int argc, char** argv) {
             check(hq > rt, "REALTIME -> HQ: reported delay grows (samples)", double(hq) - double(rt));
             close(il);
         }
+#if defined(_WIN32)
+        if (editor) testEditor(a, p);
+#else
+        (void)editor;
+#endif
         close(a); close(b); close(c);
     }
     std::printf("%d checks, %d failed\n", checks, failures);

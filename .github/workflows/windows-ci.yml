@@ -45,8 +45,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ./tools/ci/fetch-mesa.ps1 -TargetDirs build/Release
+          ./tools/ci/fetch-mesa.ps1 -TargetDirs "build/Release,build/plugin/Release"
           ./build/Release/dm_faceplate_snapshot.exe --out faceplates --width 1920 --assets build/Release/assets 2>&1 | Tee-Object -FilePath faceplate-report.txt
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - name: Faceplates inside a host window (open, draw, mouse drag, close)
+        shell: pwsh
+        run: |
+          $bundle = (Get-ChildItem build -Recurse -Directory -Filter 'HEM Dark Matter.vst3' | Where-Object { $_.FullName -match '\\Release\\' } | Select-Object -First 1).FullName
+          ./build/plugin/Release/dm_vst3_hosttest.exe "$bundle" --editor 2>&1 | Tee-Object -FilePath editor-report.txt
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Upload faceplate pictures
@@ -57,6 +64,7 @@ jobs:
           path: |
             faceplates/*.png
             faceplate-report.txt
+            editor-report.txt
 
       - name: Build installer
         shell: pwsh

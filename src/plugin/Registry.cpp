@@ -135,7 +135,13 @@ bool applyStateText(EngineApi& e, std::string_view text) {
 
 std::filesystem::path userPresetRoot() {
 #if defined(_WIN32)
-    if (const char* a = std::getenv("APPDATA")) return std::filesystem::path(a) / "HEM" / "Dark Matter";
+    wchar_t* a = nullptr;
+    std::size_t len = 0;
+    if (_wdupenv_s(&a, &len, L"APPDATA") == 0 && a) {
+        std::filesystem::path p = std::filesystem::path(a) / "HEM" / "Dark Matter";
+        std::free(a);
+        return p;
+    }
 #else
     if (const char* x = std::getenv("XDG_CONFIG_HOME")) return std::filesystem::path(x) / "HEM" / "Dark Matter";
     if (const char* h = std::getenv("HOME")) return std::filesystem::path(h) / ".config" / "HEM" / "Dark Matter";
