@@ -82,6 +82,10 @@ file(GLOB DM_UI_LAYOUTS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/ui/layouts/*.c
 add_library(dm_ui_core STATIC src/ui/PanelModel.cpp src/ui/PanelController.cpp src/ui/Faceplates.cpp ${DM_UI_LAYOUTS})
 target_include_directories(dm_ui_core PUBLIC include)
 target_link_libraries(dm_ui_core PUBLIC dm_build_flags dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker)
+# Plug-in catalogue + host binding (no plug-in SDK): shared by the VST3 wrapper and the tests.
+add_library(dm_plugin_core STATIC src/plugin/Registry.cpp src/plugin/HostBinding.cpp)
+target_include_directories(dm_plugin_core PUBLIC include)
+target_link_libraries(dm_plugin_core PUBLIC dm_ui_core)
 # Faceplate drawing on the Hybrid Core OpenGL renderer.
 add_library(dm_ui STATIC src/ui/PanelView.cpp)
 target_include_directories(dm_ui PUBLIC include)
@@ -94,6 +98,6 @@ add_custom_command(TARGET dm_faceplate_snapshot POST_BUILD
 
 # ---- Tests ---------------------------------------------------------------------------------------------
 enable_testing()
-add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp tests/faceplate_tests.cpp)
-target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker dm_ui_core)
+add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp tests/faceplate_tests.cpp tests/plugin_tests.cpp)
+target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker dm_ui_core dm_plugin_core)
 add_test(NAME dm_tests COMMAND dm_tests)

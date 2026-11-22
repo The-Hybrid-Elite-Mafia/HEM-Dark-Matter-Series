@@ -74,6 +74,11 @@ public:
     void processCore(float& l, float& r) noexcept;
     [[nodiscard]] int coreLatency() const noexcept { return hq_ ? latHq_ : latRt_; }
     [[nodiscard]] int maxCoreLatency() const noexcept { return latHq_; }
+    // Latency the current REALTIME / HQ setting gives, read straight from the parameter (a plug-in host
+    // can ask before the next process() call has applied the change).
+    [[nodiscard]] int latencyFromParams() const noexcept {
+        return latencySamples() - coreLatency() + (params().get(Quality) >= 0.5f ? latHq_ : latRt_);
+    }
     [[nodiscard]] bool coreActive() const noexcept { return active_; }
     void afterChunk(int n) noexcept;
 

@@ -102,6 +102,8 @@ bool interactive(const Widget& w) {
     }
 }
 
+} // namespace
+
 void testPanel(const char* name, const PanelDef& def, PanelBinding& b, const std::vector<int>& hidden) {
     dmt::section(name);
     const auto issues = checkLayout(def, b, hidden);
@@ -169,8 +171,6 @@ void testPanel(const char* name, const PanelDef& def, PanelBinding& b, const std
     }
     dmt::check(names.size() >= 1, "factory presets available (count)", double(names.size()));
 }
-
-} // namespace
 
 void runFaceplateTests() {
     {

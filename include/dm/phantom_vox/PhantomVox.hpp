@@ -92,6 +92,7 @@ public:
 
     [[nodiscard]] int latencySamples() const noexcept { return limiter_.latency(); }
     [[nodiscard]] ParamSet<kParamCount>& params() noexcept { return params_; }
+    [[nodiscard]] const ParamSet<kParamCount>& params() const noexcept { return params_; }
     [[nodiscard]] const Meters& meters() const noexcept { return meters_; }
     [[nodiscard]] AnalyzerTap& analyzer() noexcept { return analyzer_; }
 
