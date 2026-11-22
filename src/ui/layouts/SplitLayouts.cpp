@@ -144,6 +144,7 @@ PanelDef splitPanel(SplitKind k) {
         break;
     }
     }
+    fitFrame(d);
     return d;
 }
 

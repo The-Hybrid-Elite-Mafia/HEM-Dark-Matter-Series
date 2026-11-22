@@ -81,6 +81,35 @@ struct Widget {
     float  titleBase = 100;     // Bay: title baseline below the bay top
 };
 
+// ---- The HEM frame (Steven's blank faceplate template, straightened, 3840 x 2160) ----------------------
+// Every faceplate sits in the same frame: chassis, light strips and the hooded crown emblem come from the
+// art (assets/faceplates/HEM-Frame-4K.jpg); the plug-in's own controls are placed on its glass bed. All
+// boxes below are in frame pixels, measured on that art.
+namespace frame {
+inline constexpr float kW = 3840.0f, kH = 2160.0f;
+inline constexpr Box bed{265, 482, 3455, 1456};        // glass bed inside the chassis (circuit board under glass)
+inline constexpr Box emblem{1716, 168, 457, 458};      // hooded crown emblem, dips into the bed top
+inline constexpr Box content{560, 645, 2865, 1270};    // where a plug-in's own controls go (clear of emblem + side panels)
+inline constexpr Box inPanel{320, 645, 200, 1270};     // INPUT side panel
+inline constexpr Box outPanel{3465, 645, 200, 1270};   // OUTPUT side panel
+inline constexpr float titleX = 395, titleBase = 335, titleMaxW = 1290;   // "HEM <NAME>" (clear of the corner screw at 345,309)
+inline constexpr float brandR = 3540, brandBase = 335, brandMaxW = 1300;  // "HYBRID ELITE MAFIA" (clear of the corner screw at 3588,330)
+inline constexpr Box undo{330, 366, 116, 104}, redo{460, 366, 116, 104};
+inline constexpr Box preset{604, 366, 640, 104}, presetPrev{1258, 366, 104, 104}, presetNext{1372, 366, 104, 104};
+inline constexpr Box presetSave{1500, 366, 116, 104};
+inline constexpr Box bypass{3450, 362, 240, 112};
+inline constexpr float topKeysX = 2240, topKeysStep = 112, topKeyW = 100;   // extra top-strip keys (e.g. quick chains 1-8)
+inline constexpr Box inTrim{330, 720, 180, 90}, outTrim{3475, 720, 180, 90};
+inline constexpr Box inMeter{380, 840, 80, 1040}, outMeter{3525, 840, 80, 1040};
+} // namespace frame
+
+// Where a plug-in's own design space sits in the frame: frame = o + s * design.
+struct FrameMap {
+    float s = 1.0f, ox = 0.0f, oy = 0.0f;
+    [[nodiscard]] Box toFrame(const Box& b) const noexcept { return {ox + s * b.x, oy + s * b.y, s * b.w, s * b.h}; }
+    [[nodiscard]] Box toDesign(const Box& b) const noexcept { return {(b.x - ox) / s, (b.y - oy) / s, b.w / s, b.h / s}; }
+};
+
 struct PanelDef {
     std::string name;          // "HEM PHANTOM VOX"
     float w = kPlateW, h = kPlateH;   // plate size in design units (split plug-ins are smaller)
@@ -92,7 +121,15 @@ struct PanelDef {
     int bypassParam = 2, inputParam = 0, outputParam = 1;
     int meterInL = 0, meterInR = 1, meterOutL = 2, meterOutR = 3;   // feed ids for the bottom-bar meters
     std::vector<Box> extraTopButtons;  // e.g. chain slots 1-8, GROUPS / REALTIME-HQ
+    FrameMap frame;                    // set by fitFrame(): where this design space sits in the HEM frame
 };
+
+// Places a finished layout in the HEM frame: scales its controls uniformly onto the frame's content area,
+// moves the preset / undo / BYPASS keys and any top-bar keys into the frame's top strip, and the
+// INPUT / OUTPUT trims + meters into the side panels. Called by every layout builder as its last step.
+void fitFrame(PanelDef& d);
+// The frame's glass bed in this plate's design units (controls must stay inside it).
+[[nodiscard]] Box bedInDesign(const PanelDef& d) noexcept;
 
 // ---- What the faceplate needs from an engine (UI thread). ------------------------------------------
 class PanelBinding {
@@ -141,12 +178,8 @@ struct Track { float a, b; };
 [[nodiscard]] bool isShown(const Widget& w, const PanelBinding& b);
 // The INPUT / OUTPUT capsules in the bottom frame (number + label + meter). The whole capsule is the trim
 // knob's grab area, and the view draws its recessed well from the same box.
-[[nodiscard]] inline Box inputWell(const PanelDef& d) noexcept {
-    return {d.inputTrim.x - 30, d.h - 162, d.inputMeter.r() - d.inputTrim.x + 60, 114};
-}
-[[nodiscard]] inline Box outputWell(const PanelDef& d) noexcept {
-    return {d.outputMeter.x - 200, d.h - 162, d.outputTrim.r() - d.outputMeter.x + 230, 114};
-}
+[[nodiscard]] inline Box inputWell(const PanelDef& d) noexcept { return d.frame.toDesign(frame::inPanel); }
+[[nodiscard]] inline Box outputWell(const PanelDef& d) noexcept { return d.frame.toDesign(frame::outPanel); }
 
 // ---- Layout checks (used by tests and by the snapshot tool) -----------------------------------------
 struct LayoutIssue { std::string what; };

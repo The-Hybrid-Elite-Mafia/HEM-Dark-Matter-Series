@@ -76,9 +76,58 @@ bool isShown(const Widget& w, const PanelBinding& b) {
 }
 
 // ---- layout checks ----------------------------------------------------------------------------------
+// ---- the HEM frame ------------------------------------------------------------------------------------
+namespace {
+constexpr float kTopBarBottom = 222.0f;   // layouts' old top bar: anything above this moves into the frame's top strip
+constexpr float kPad = 30.0f;             // breathing room round a layout's controls on the bed
+}
+
+void fitFrame(PanelDef& d) {
+    Box bb{};
+    bool any = false;
+    std::vector<std::size_t> topKeys;
+    for (std::size_t i = 0; i < d.widgets.size(); ++i) {
+        const Box& b = d.widgets[i].box;
+        if (b.b() <= kTopBarBottom) { topKeys.push_back(i); continue; }
+        if (!any) { bb = b; any = true; continue; }
+        const float x0 = std::min(bb.x, b.x), y0 = std::min(bb.y, b.y);
+        bb = {x0, y0, std::max(bb.r(), b.r()) - x0, std::max(bb.b(), b.b()) - y0};
+    }
+    if (!any) bb = {0, 0, d.w, d.h};
+    bb = {bb.x - kPad, bb.y - kPad, bb.w + 2 * kPad, bb.h + 2 * kPad};
+    const Box& c = frame::content;
+    FrameMap& f = d.frame;
+    f.s = std::min(c.w / bb.w, c.h / bb.h);
+    f.ox = c.x + (c.w - bb.w * f.s) * 0.5f - bb.x * f.s;
+    f.oy = c.y + (c.h - bb.h * f.s) * 0.5f - bb.y * f.s;
+    // top strip: title, preset keys, undo / redo, BYPASS, then any keys the layout had in its top bar
+    d.title = f.toDesign({frame::titleX, frame::titleBase - 100, frame::titleMaxW, 120});
+    d.undo = f.toDesign(frame::undo);
+    d.redo = f.toDesign(frame::redo);
+    d.preset = f.toDesign(frame::preset);
+    d.presetPrev = f.toDesign(frame::presetPrev);
+    d.presetNext = f.toDesign(frame::presetNext);
+    d.presetSave = f.toDesign(frame::presetSave);
+    d.bypass = f.toDesign(frame::bypass);
+    for (std::size_t k = 0; k < topKeys.size(); ++k)
+        d.widgets[topKeys[k]].box = f.toDesign({frame::topKeysX + frame::topKeysStep * static_cast<float>(k), frame::undo.y, frame::topKeyW, frame::undo.h});
+    // side panels: INPUT left, OUTPUT right
+    d.inputTrim = f.toDesign(frame::inTrim);
+    d.inputMeter = f.toDesign(frame::inMeter);
+    d.outputTrim = f.toDesign(frame::outTrim);
+    d.outputMeter = f.toDesign(frame::outMeter);
+    d.footer.clear();
+    d.footerBox = {};
+}
+
+Box bedInDesign(const PanelDef& d) noexcept { return d.frame.toDesign(frame::bed); }
+
 std::vector<LayoutIssue> checkLayout(const PanelDef& def, const PanelBinding& b, std::vector<int> notOnPlate) {
     std::vector<LayoutIssue> out;
-    const Box plate{0, 0, def.w, def.h};
+    const Box bed = bedInDesign(def);
+    const Box topStrip = def.frame.toDesign({frame::bed.x, frame::undo.y - 10, frame::bed.w, frame::undo.h + 20});
+    const Box emblem = def.frame.toDesign(frame::emblem);
+    const Box sides[2] = {inputWell(def), outputWell(def)};
     std::vector<bool> bound(b.paramCount(), false);
     auto mark = [&](int p) { if (p >= 0 && static_cast<std::size_t>(p) < bound.size()) bound[static_cast<std::size_t>(p)] = true; };
     mark(def.bypassParam); mark(def.inputParam); mark(def.outputParam);
@@ -89,7 +138,10 @@ std::vector<LayoutIssue> checkLayout(const PanelDef& def, const PanelBinding& b,
         }
         mark(w.param);
         if (w.kind == Kind::Range || w.kind == Kind::Selector || w.kind == Kind::Handle || w.kind == Kind::Pad) mark(w.param2);
-        if (!w.box.inside(plate)) out.push_back({"outside the plate: " + w.label});
+        if (!w.box.inside(bed) && !w.box.inside(topStrip)) out.push_back({"outside the glass bed: " + w.label});
+        if (w.kind != Kind::Label && w.box.overlaps(emblem)) out.push_back({"under the emblem: " + w.label});
+        for (const Box& sd : sides)
+            if (w.box.overlaps(sd)) out.push_back({"on an INPUT / OUTPUT side panel: " + w.label});
     }
     for (std::size_t i = 0; i < bound.size(); ++i)
         if (!bound[i]) out.push_back({"no control on the faceplate for '" + std::string(b.desc(static_cast<int>(i)).id) + "'"});
@@ -173,6 +225,7 @@ PanelDef phantomVoxPanel() {
     d.widgets.push_back(button(FltPost, {3445, 820, 190, 72}, "FLT POST", Accent::Gold));
     d.widgets.push_back(knob(Sfx, 3245, 1110, 200, Accent::Orange, "SFX", 1.3f));
     d.widgets.push_back(knob(Enhancer, 3245, 1640, 190, Accent::Cyan, "ENHANCER", 1.3f));
+    fitFrame(d);
     return d;
 }
 

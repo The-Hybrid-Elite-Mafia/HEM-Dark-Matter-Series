@@ -49,6 +49,7 @@ PanelDef apexPanel() {
     d.widgets.push_back(display(DisplayKind::Tilt, 0, {2965, 1375, 680, 370}, "COLOR PROFILE", Accent::Orange));
     d.widgets.push_back(readout(P(ColorLow), {2965, 1765, 330, 80}, "LOW", Accent::Orange));
     d.widgets.push_back(readout(P(ColorHigh), {3315, 1765, 330, 80}, "HIGH", Accent::Orange));
+    fitFrame(d);
     return d;
 }
 

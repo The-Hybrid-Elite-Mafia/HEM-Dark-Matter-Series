@@ -120,6 +120,10 @@ public:
     // give emissive parts of the cached static layer their glow every frame).
     void setBloomOnly(bool on) noexcept { bloomOnly_ = on; }
     [[nodiscard]] float pixelSize() const noexcept { return 1.0f / canvas_.scale; }   // one window pixel in design units
+    // Switch the design-unit mapping mid-frame (e.g. a frame drawn in its own pixels around a plug-in
+    // drawn in its own units). Same target, same batch.
+    void setCanvas(const Canvas& c) noexcept { canvas_ = c; }
+    [[nodiscard]] const Canvas& canvas() const noexcept { return canvas_; }
 
 private:
     struct Vertex {

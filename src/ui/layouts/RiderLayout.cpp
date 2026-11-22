@@ -30,6 +30,7 @@ PanelDef riderPanel() {
     d.widgets.push_back(knob(P(Target), 1920, 1555, 190, Accent::Orange, "TARGET", 1.3f));
     d.widgets.push_back(knob(P(Range), 2640, 1555, 140, Accent::Orange, "RANGE"));
     d.widgets.push_back(knob(P(RiderOut), 3280, 1555, 140, Accent::Cyan, "OUTPUT"));
+    fitFrame(d);
     return d;
 }
 

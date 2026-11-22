@@ -119,6 +119,7 @@ PanelDef syndicatePanel() {
     { Widget l; l.kind = Kind::Label; l.label = "CLIP"; l.box = {3275, 1808, 200, 40}; l.size = 0.5f; d.widgets.push_back(l); }
     const char* cn[4] = {"OFF", "SOFT", "HARD", "MST"};
     for (int i = 0; i < 4; ++i) d.widgets.push_back(button(P(kMax + MaxModule::Clip), {3098 + 140.0f * i, 1858, 128, 72}, cn[i], Accent::Purple, i));
+    fitFrame(d);
     return d;
 }
 

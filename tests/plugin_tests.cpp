@@ -244,8 +244,9 @@ void testTrimCapsules() {
                 b->setValue(params[k], 0.0f);
             }
             dm::ui::PanelController c(def, *b);
-            const float wordX = k ? def.outputMeter.x - 120 : def.inputMeter.x - 70;
-            c.wheel(wordX, wells[k].cy(), -3.0f, false);
+            // the word INPUT / OUTPUT sits at the top of its side panel (frame y + 56 px baseline)
+            const dm::ui::Box word = def.frame.toDesign({k ? dm::ui::frame::outPanel.x : dm::ui::frame::inPanel.x, dm::ui::frame::inPanel.y + 20, dm::ui::frame::inPanel.w, 40});
+            c.wheel(word.cx(), word.cy(), -3.0f, false);
             check(b->value(params[k]) < 0.0f, (n + (k ? ": wheel on the word OUTPUT" : ": wheel on the word INPUT") + " turns the trim (dB)").c_str(), b->value(params[k]));
             b->setValue(params[k], 0.0f);
         }

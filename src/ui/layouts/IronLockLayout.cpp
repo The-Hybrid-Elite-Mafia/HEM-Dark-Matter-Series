@@ -77,6 +77,7 @@ PanelDef ironLockPanel() {
     d.widgets.push_back(meter(SrOutL, {3420, 1200, 56, 640}, "L", Accent::Cyan, -48, 0));
     d.widgets.push_back(meter(SrOutR, {3540, 1200, 56, 640}, "R", Accent::Cyan, -48, 0));
     { Widget l; l.kind = Kind::Label; l.label = "OUT dBFS"; l.box = {3350, 1125, 325, 40}; l.size = 0.5f; d.widgets.push_back(l); }
+    fitFrame(d);
     return d;
 }
 

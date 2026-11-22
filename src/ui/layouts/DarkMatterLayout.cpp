@@ -46,6 +46,7 @@ PanelDef darkMatterPanel() {
     d.widgets.push_back(readout(P(Time), {2405, 1300, 330, 92}, "TIME", Accent::Orange));
     d.widgets.push_back(knob(P(Feedback), 3480, 1240, 90, Accent::Orange, "FEEDBACK"));
     d.widgets.push_back(button(P(Multiplier), {3360, 1720, 270, 84}, "400% MULTI", Accent::Gold));
+    fitFrame(d);
     return d;
 }
 

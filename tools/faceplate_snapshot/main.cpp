@@ -120,6 +120,8 @@ int main(int argc, char** argv) {
     auto art = hc::ui::loadFaceplateArt(assets / "faceplates" / "Main-Faceplate.png", &err);
     if (!art) { std::printf("FAIL parts art: %s\n", err.c_str()); return 3; }
     const hc::ui::PartsAtlas parts = hc::ui::buildPartsAtlas(art->master);
+    auto frameArt = hc::ui::loadImageFile(assets / "faceplates" / "HEM-Frame-4K.jpg", &err);
+    if (!frameArt) { std::printf("FAIL frame art: %s\n", err.c_str()); return 3; }
 
     // ---- engines ----
     static dm::pv::PhantomVox pv;
@@ -195,19 +197,16 @@ int main(int argc, char** argv) {
 
         hc::ui::Renderer r;
         if (!r.init(4, &err) || !r.setParts(parts, &err)) { std::printf("FAIL %s renderer: %s\n", job.name.c_str(), err.c_str()); ++failures; continue; }
-        hc::ui::Canvas canvas{};
-        const int height = static_cast<int>(std::lround(width * job.def.h / job.def.w));
-        canvas.scale = static_cast<float>(width) / job.def.w;
-        canvas.offsetX = 0; canvas.offsetY = 0;
-        canvas.pixelW = static_cast<float>(width); canvas.pixelH = static_cast<float>(height);
+        const int height = static_cast<int>(std::lround(width * frame::kH / frame::kW));
+        const hc::ui::Canvas canvas = frameCanvas(static_cast<float>(width), static_cast<float>(height));
         hc::ui::FontAtlas font;
-        if (!font.bake(*fonts, canvas.scale) || !r.setFont(font, &err)) { std::printf("FAIL font bake\n"); ++failures; continue; }
-        const float ppu = std::min(canvas.scale, 4096.0f / job.def.w);
-        if (!r.setPanel(hc::ui::buildMips(hc::ui::premultiply(renderPlate(job.def, ppu))), &err) || !r.setTargetSize(width, height, &err)) {
+        if (!font.bake(*fonts, canvas.scale * std::max(1.0f, job.def.frame.s)) || !r.setFont(font, &err)) { std::printf("FAIL font bake\n"); ++failures; continue; }
+        const float ppu = std::min(canvas.scale, 4096.0f / frame::kW);
+        if (!r.setPanel(hc::ui::buildMips(hc::ui::premultiply(renderPlate(job.def, ppu, *frameArt))), &err) || !r.setTargetSize(width, height, &err)) {
             std::printf("FAIL %s targets: %s\n", job.name.c_str(), err.c_str()); ++failures; continue;
         }
         r.beginStatic(canvas);
-        r.panel({0, 0, job.def.w, job.def.h});
+        r.panel({0, 0, frame::kW, frame::kH});
         r.endStatic();
         PanelController ctl(job.def, job.binding());
         if (job.menuCategory >= 0) ctl.openMenu(job.menuCategory);   // preset-browser view

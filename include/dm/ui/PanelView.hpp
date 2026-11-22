@@ -1,10 +1,11 @@
 #pragma once
 // HEM Dark Matter Series - faceplate drawing on the reused Hybrid Core renderer (OpenGL 3.3).
-//   renderPlate() : static "Hybrid Elite Mafia" chassis on the CPU - chamfered brushed-gunmetal bezel,
-//                   brushed titanium field, raised top / bottom bars, recessed obsidian bays,
-//                   dark glass windows, hex screws. Lit from the top-left like every HEM faceplate.
-//   PanelView     : draws everything that moves (knobs, faders, buttons, meters, displays, text,
-//                   neon edge light) every frame from the binding.
+//   renderPlate() : static plate on the CPU - the HEM frame art (Steven's template: chassis, light strips,
+//                   hooded crown emblem, circuit board under glass) with this plug-in's smoked-glass
+//                   panels, metal mode plates, display windows and side panels cut into the glass bed.
+//   PanelView     : draws everything that moves (knobs, faders, buttons, meters, displays, text) every
+//                   frame from the binding. Top strip + side panels in frame pixels, the plug-in's own
+//                   controls in its design units (contentCanvas).
 #include "dm/ui/PanelController.hpp"
 #include "dm/ui/PanelModel.hpp"
 #include "hybrid/ui/Image.hpp"
@@ -15,7 +16,12 @@
 namespace dm::ui {
 
 [[nodiscard]] hc::ui::Rgba accentColour(Accent a) noexcept;
-[[nodiscard]] hc::ui::Image renderPlate(const PanelDef& def, float pixelsPerUnit);
+// frameArt: assets/faceplates/HEM-Frame-4K.jpg (3840 x 2160). pixelsPerUnit: output pixels per frame pixel.
+[[nodiscard]] hc::ui::Image renderPlate(const PanelDef& def, float pixelsPerUnit, const hc::ui::Image& frameArt);
+// Window canvas for the whole frame (frame pixels -> window pixels, letterboxed, centred).
+[[nodiscard]] hc::ui::Canvas frameCanvas(float pixelW, float pixelH) noexcept;
+// Canvas for a plug-in's own design units inside the frame canvas (what the controller's mouse uses).
+[[nodiscard]] hc::ui::Canvas contentCanvas(const hc::ui::Canvas& frame, const PanelDef& def) noexcept;
 
 class PanelView {
 public:
@@ -26,9 +32,8 @@ public:
     void sample(PanelBinding& b);
 
 private:
-    void drawChassisLights(hc::ui::Renderer& r);
-    void drawTopBar(hc::ui::Renderer& r, PanelBinding& b, const PanelController& c);
-    void drawBottomBar(hc::ui::Renderer& r, PanelBinding& b, const PanelController& c);
+    void drawTopStrip(hc::ui::Renderer& r, PanelBinding& b, const PanelController& c);   // frame pixels
+    void drawSidePanels(hc::ui::Renderer& r, PanelBinding& b, const PanelController& c); // frame pixels
     void drawWidget(hc::ui::Renderer& r, PanelBinding& b, const Widget& w, bool hot);
     void drawKnob(hc::ui::Renderer& r, PanelBinding& b, const Widget& w, bool hot);
     void drawFader(hc::ui::Renderer& r, PanelBinding& b, const Widget& w, bool hot);
@@ -43,7 +48,7 @@ private:
     void drawPad(hc::ui::Renderer& r, PanelBinding& b, const Widget& w, bool hot);
     void drawIcon(hc::ui::Renderer& r, Icon icon, float cx, float cy, float size, hc::ui::Rgba c, bool lit);
     void drawPresetMenu(hc::ui::Renderer& r, PanelBinding& b, const PanelController& c);
-    void hMeter(hc::ui::Renderer& r, Box box, float dbL, float dbR);
+    void vMeter(hc::ui::Renderer& r, Box box, float dbL, float dbR);
     void capChrome(hc::ui::Renderer& r, float cx, float cy, float w, float h, hc::ui::Rgba line, bool horizontal);
 
     const PanelDef& def_;

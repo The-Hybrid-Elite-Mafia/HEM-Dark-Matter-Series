@@ -228,11 +228,11 @@ void testEditor(Instance& in, const dm::plugin::PluginInfo& p) {
     if (child) {
         // drag the first always-visible knob upwards and watch the controller value move
         const auto def = p.panel();
-        const float scale = float(w) / def.w;
+        const float scale = float(w) / dm::ui::frame::kW;   // window pixels per frame pixel (editor is the 16:9 frame)
         for (const auto& wdg : def.widgets) {
             if (wdg.kind != dm::ui::Kind::Knob || wdg.showParam >= 0 || !dm::plugin::hostVisible(p, std::size_t(wdg.param))) continue;
             const double before = in.controller->getParamNormalized(Vst::ParamID(wdg.param));
-            const int x = int(wdg.box.cx() * scale), y = int(wdg.box.cy() * scale);
+            const int x = int((def.frame.ox + def.frame.s * wdg.box.cx()) * scale), y = int((def.frame.oy + def.frame.s * wdg.box.cy()) * scale);
             const int dy = before > 0.5 ? 60 : -60;   // > 0: turn it down (it starts high)
             // Mouse wheel over the knob (screen coordinates, as Windows sends them). Same path as a drag
             // (window -> faceplate -> host edit) without the endless-drag cursor wrapping, which needs a

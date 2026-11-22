@@ -68,147 +68,113 @@ Rgba accentColour(Accent a) noexcept {
 // =====================================================================================================
 //  Static plate (CPU)
 // =====================================================================================================
-hc::ui::Image renderPlate(const PanelDef& def, float ppu) {
-    const float plateW = def.w, plateH = def.h;   // this plate's own size
-    hc::ui::Image img;
-    img.width = static_cast<std::uint32_t>(std::lround(plateW * ppu));
-    img.height = static_cast<std::uint32_t>(std::lround(plateH * ppu));
-    img.rgba.assign(static_cast<std::size_t>(img.width) * img.height * 4, 0);
-    // Heavy machined frame -> raised inner lip -> recessed brushed field that carries the bays.
-    const Box frame{8, 8, plateW - 16, plateH - 16};
-    const Box lip{70, 40, plateW - 140, plateH - 80};
-    const Box field{118, 222, plateW - 236, plateH - 408};
-    std::vector<Box> bays, plates, glass, wells;
+hc::ui::Image renderPlate(const PanelDef& def, float ppu, const hc::ui::Image& frameArt) {
+    // 1) the HEM frame art at the output size
+    const auto W = static_cast<std::uint32_t>(std::lround(frame::kW * ppu));
+    const auto H = static_cast<std::uint32_t>(std::lround(frame::kH * ppu));
+    hc::ui::Image img = frameArt.empty() ? hc::ui::Image{} : hc::ui::resizeSrgb(frameArt, W, H);
+    if (img.empty()) {   // no art on disk: plain dark chassis so the controls still work
+        img.width = W; img.height = H;
+        img.rgba.assign(static_cast<std::size_t>(W) * H * 4, 0);
+        for (std::size_t i = 0; i < img.rgba.size(); i += 4) { img.rgba[i] = img.rgba[i + 1] = 14; img.rgba[i + 2] = 17; img.rgba[i + 3] = 255; }
+    }
+    // 2) this plug-in's panels, cut into the glass bed (frame pixels)
+    const FrameMap& fm = def.frame;
+    struct Shape { Box b; float rad; int kind; };   // 0 smoked glass panel, 1 metal mode plate, 2 display glass, 3 well
+    std::vector<Shape> shapes;
     for (const auto& w : def.widgets) {
         if (w.kind == Kind::Bay) {
-            if (w.screen.w <= 0) bays.push_back(w.box);
-            else {
-                // mode bay: raised brushed-metal plate carrying a recessed glass screen
-                plates.push_back(w.box);
-                glass.push_back(w.screen);
-            }
+            if (w.screen.w <= 0) shapes.push_back({fm.toFrame(w.box), 26 * fm.s, 0});
+            else { shapes.push_back({fm.toFrame(w.box), 30 * fm.s, 1}); shapes.push_back({fm.toFrame(w.screen), 16 * fm.s, 2}); }
         }
-        if (w.kind == Kind::Display && w.showParam < 0) glass.push_back(w.box);   // switchable displays draw their own glass
+        if (w.kind == Kind::Display && w.showParam < 0) shapes.push_back({fm.toFrame(w.box), 16 * fm.s, 2});
     }
-    // recessed wells in the frame: preset strip, top buttons, input / output capsules
-    wells.push_back({def.preset.x - 6, def.preset.y - 6, def.presetNext.r() - def.preset.x + 12, def.preset.h + 12});
-    wells.push_back(inputWell(def));
-    wells.push_back(outputWell(def));
-    const std::array<std::array<float, 2>, 4> screws{{{194, 119}, {plateW - 194, 119}, {194, plateH - 120}, {plateW - 194, plateH - 120}}};
+    shapes.push_back({frame::inPanel, 22, 0});
+    shapes.push_back({frame::outPanel, 22, 0});
+    shapes.push_back({{frame::preset.x - 8, frame::preset.y - 8, frame::presetSave.r() - frame::preset.x + 16, frame::preset.h + 16}, 20, 3});
+    // mode plates and display windows go on top of their panels: draw in this order
+    std::stable_sort(shapes.begin(), shapes.end(), [](const Shape& x, const Shape& y) { return (x.kind == 2) < (y.kind == 2); });
 
-    auto grad = [](float (*sd)(float, float, const Box&, float), float x, float y, const Box& b, float rad, float& nx, float& ny) {
+    auto grad = [](float x, float y, const Box& b, float rad, float& nx, float& ny) {
         const float e = 0.75f;
-        nx = sd(x + e, y, b, rad) - sd(x - e, y, b, rad);
-        ny = sd(x, y + e, b, rad) - sd(x, y - e, b, rad);
+        nx = sdRound(x + e, y, b, rad) - sdRound(x - e, y, b, rad);
+        ny = sdRound(x, y + e, b, rad) - sdRound(x, y - e, b, rad);
         const float l = std::sqrt(nx * nx + ny * ny) + 1e-6f;
         nx /= l; ny /= l;
     };
-    for (std::uint32_t py = 0; py < img.height; ++py) {
-        for (std::uint32_t px = 0; px < img.width; ++px) {
-            const float ux = (static_cast<float>(px) + 0.5f) / ppu, uy = (static_cast<float>(py) + 0.5f) / ppu;
-            const float dF = sdRound(ux, uy, frame, 120);
-            if (dF > 1.0f) continue;
-            float L;
-            float tR = 1.0f, tG = 1.0f, tB = 1.05f;
-            const float dLip = sdRound(ux, uy, lip, 90);
-            const float dFld = sdRound(ux, uy, field, 34);
-            float nx, ny;
-            if (dLip > 0.0f) {
-                // outer frame: dark anodised gunmetal, rolled outer edge
-                L = 0.008f + 0.007f * brushed(ux * 0.6f, uy) + 0.005f * (1.0f - uy / plateH);
-                grad(sdRound, ux, uy, frame, 120, nx, ny);
-                const float roll = std::clamp(1.0f + dF / 40.0f, 0.0f, 1.0f);
-                L += 0.24f * roll * roll * std::max(0.0f, bevelLight(-nx, -ny)) + 0.02f * roll;
-                grad(sdRound, ux, uy, lip, 90, nx, ny);
-                const float wall = std::clamp(1.0f - dLip / 10.0f, 0.0f, 1.0f);   // step down onto the lip
-                L += 0.16f * wall * bevelLight(-nx, -ny);
-            } else if (dFld > 0.0f) {
-                // machined top / bottom deck and side rails: brushed steel, horizontal grain
-                L = 0.013f + 0.011f * brushed(ux, uy) + 0.008f * std::exp(-std::pow((uy - 120.0f) / 160.0f, 2.0f));
-                grad(sdRound, ux, uy, lip, 90, nx, ny);
-                const float edge = std::clamp(1.0f + dLip / 8.0f, 0.0f, 1.0f);
-                L += 0.10f * edge * bevelLight(-nx, -ny);
-                grad(sdRound, ux, uy, field, 34, nx, ny);
-                const float ch = std::clamp(1.0f - dFld / 12.0f, 0.0f, 1.0f);       // chamfer down into the field
-                L += 0.08f * ch * bevelLight(nx, ny);
-                for (const Box& w : wells) {
-                    const float d = sdRound(ux, uy, w, 22);
-                    if (d < 0.0f) {
-                        L = 0.012f + 0.006f * brushed(ux * 0.4f, uy);
-                        L *= 0.55f + 0.45f * std::clamp((uy - w.y) / 26.0f, 0.0f, 1.0f);
-                        if (d > -2.5f && uy > w.cy()) L += 0.07f;
-                    } else if (d < 5.0f) {
-                        L *= 0.7f + 0.3f * d / 5.0f;
+    for (const Shape& sh : shapes) {
+        const float margin = 26.0f;   // contact shadow round each piece
+        const int x0 = std::max(0, static_cast<int>((sh.b.x - margin) * ppu)), x1 = std::min(static_cast<int>(W), static_cast<int>((sh.b.r() + margin) * ppu) + 1);
+        const int y0 = std::max(0, static_cast<int>((sh.b.y - margin) * ppu)), y1 = std::min(static_cast<int>(H), static_cast<int>((sh.b.b() + margin) * ppu) + 1);
+        for (int py = y0; py < y1; ++py) {
+            for (int px = x0; px < x1; ++px) {
+                const float ux = (static_cast<float>(px) + 0.5f) / ppu, uy = (static_cast<float>(py) + 0.5f) / ppu;
+                const float d = sdRound(ux, uy, sh.b, sh.rad);
+                std::uint8_t* p = &img.rgba[(static_cast<std::size_t>(py) * W + px) * 4];
+                float R = hc::ui::srgb8ToLinear(p[0]), G = hc::ui::srgb8ToLinear(p[1]), B = hc::ui::srgb8ToLinear(p[2]);
+                if (d >= 0.0f) {   // outside: soft contact shadow on the bed
+                    const float k = 0.42f + 0.58f * std::clamp(d / margin, 0.0f, 1.0f);
+                    R *= k; G *= k; B *= k;
+                } else {
+                    float nx, ny;
+                    grad(ux, uy, sh.b, sh.rad, nx, ny);
+                    const float t = std::clamp((uy - sh.b.y) / sh.b.h, 0.0f, 1.0f);
+                    const float rim = std::clamp(1.0f + d / 4.0f, 0.0f, 1.0f);   // 4 px bevel at the cut edge
+                    const float lit = std::max(0.0f, bevelLight(-nx, -ny));
+                    if (sh.kind == 0) {
+                        // smoked glass panel over the circuit board: board still faintly visible, top sheen
+                        const float k = 0.30f;
+                        R = R * k + 0.0045f; G = G * k + 0.0055f; B = B * k + 0.0075f;
+                        const float sheen = 0.010f * (1.0f - t) * (1.0f - t);
+                        R += sheen; G += sheen; B += sheen * 1.15f;
+                        R += rim * (0.10f * lit + 0.012f); G += rim * (0.11f * lit + 0.014f); B += rim * (0.12f * lit + 0.018f);
+                    } else if (sh.kind == 1) {
+                        // raised brushed-metal mode plate
+                        float L = 0.030f - 0.011f * t + 0.015f * brushed(ux / fm.s, uy / fm.s);
+                        const float edge = std::clamp(1.0f + d / 7.0f, 0.0f, 1.0f);
+                        L += 0.13f * edge * lit - 0.012f * edge * std::max(0.0f, bevelLight(nx, ny));
+                        R = L; G = L; B = L * 1.05f;
+                    } else if (sh.kind == 2) {
+                        // deep display glass with a machined bezel ring
+                        float L = 0.010f + 0.008f * (1.0f - t);
+                        L *= 0.55f + 0.45f * std::clamp(std::min(uy - sh.b.y, ux - sh.b.x) / 22.0f, 0.0f, 1.0f);
+                        R = L; G = L * 1.18f; B = L * 1.45f;
+                        if (d > -3.0f) { R += 0.05f; G += 0.068f; B += 0.08f; }
+                    } else {
+                        // recessed well for the preset keys
+                        const float k = 0.25f;
+                        R *= k; G *= k; B *= k;
+                        R *= 0.55f + 0.45f * std::clamp((uy - sh.b.y) / 20.0f, 0.0f, 1.0f);
+                        G = R * 1.02f; B = R * 1.08f;
+                        if (d > -2.5f && uy > sh.b.cy()) { R += 0.06f; G += 0.06f; B += 0.065f; }
                     }
                 }
-            } else {
-                // recessed field: dark brushed charcoal with a soft vertical sheen
-                const float sheen = std::exp(-std::pow((ux - plateW * 0.5f) / 1400.0f, 2.0f));
-                L = 0.0055f + 0.0035f * brushed(ux, uy) + 0.003f * sheen;
-                L *= 0.6f + 0.4f * std::clamp(-dFld / 30.0f, 0.0f, 1.0f);       // shadow at the recess wall
-                for (const Box& b : bays) {
-                    const float d = sdRound(ux, uy, b, 26);
-                    if (d < 0.0f) {
-                        // smoked satin panel, lighter at the top, faint vertical brushing
-                        const float t = std::clamp((uy - b.y) / b.h, 0.0f, 1.0f);
-                        L = 0.017f - 0.007f * t + 0.009f * brushed(ux, uy);
-                        L += 0.005f * std::exp(-std::pow((ux - b.cx()) / (b.w * 0.35f), 2.0f)) * (1.0f - t);
-                        grad(sdRound, ux, uy, b, 26, nx, ny);
-                        const float rim = std::clamp(1.0f + d / 3.0f, 0.0f, 1.0f);
-                        L += 0.07f * rim * std::max(0.0f, bevelLight(-nx, -ny)) + 0.015f * rim;
-                    } else if (d < 22.0f) {
-                        L *= 0.45f + 0.55f * (d / 22.0f);   // soft contact shadow round each panel
-                    }
-                }
-                for (const Box& b : plates) {
-                    const float d = sdRound(ux, uy, b, 30);
-                    if (d < 0.0f) {
-                        const float t = std::clamp((uy - b.y) / b.h, 0.0f, 1.0f);
-                        L = 0.034f - 0.012f * t + 0.016f * brushed(ux, uy);
-                        grad(sdRound, ux, uy, b, 30, nx, ny);
-                        const float rim = std::clamp(1.0f + d / 7.0f, 0.0f, 1.0f);
-                        L += 0.13f * rim * std::max(0.0f, bevelLight(-nx, -ny)) - 0.012f * rim * std::max(0.0f, bevelLight(nx, ny));
-                    } else if (d < 24.0f) {
-                        L *= 0.40f + 0.60f * (d / 24.0f);
-                    }
-                }
-                for (const Box& g : glass) {
-                    const float d = sdRound(ux, uy, g, 16);
-                    if (d < 0.0f) {
-                        const float t = std::clamp((uy - g.y) / g.h, 0.0f, 1.0f);
-                        L = 0.010f + 0.008f * (1.0f - t);
-                        tB = 1.45f; tG = 1.18f;
-                        L *= 0.55f + 0.45f * std::clamp(std::min(uy - g.y, ux - g.x) / 22.0f, 0.0f, 1.0f);
-                        if (d > -3.0f) { L += 0.05f; tB = 1.6f; tG = 1.35f; }
-                    } else if (d < 9.0f) {
-                        grad(sdRound, ux, uy, g, 16, nx, ny);   // machined bezel ring round the glass
-                        L = 0.045f + 0.11f * std::max(0.0f, bevelLight(-nx, -ny)) * (1.0f - d / 9.0f) + 0.02f * brushed(ux, uy);
-                        tB = 1.03f; tG = 1.0f;
-                    }
-                }
+                p[0] = hc::ui::linearToSrgb8(std::min(1.0f, R));
+                p[1] = hc::ui::linearToSrgb8(std::min(1.0f, G));
+                p[2] = hc::ui::linearToSrgb8(std::min(1.0f, B));
+                p[3] = 255;
             }
-            for (const auto& sc : screws) {
-                const float dx = ux - sc[0], dy = uy - sc[1], rr = std::sqrt(dx * dx + dy * dy);
-                if (rr < 26.0f) {
-                    const float qx = dx / 26.0f, qy = dy / 26.0f, qz = std::sqrt(std::max(0.0f, 1.0f - qx * qx - qy * qy));
-                    const float diff = std::max(0.0f, -0.48f * qx - 0.62f * qy + 0.62f * qz);
-                    L = 0.05f + 0.24f * diff + 0.45f * std::pow(diff, 24.0f);
-                    const float ax = std::fabs(dx), ay = std::fabs(dy);
-                    if (std::max(ax * 0.866f + ay * 0.5f, ay) < 10.0f) L = 0.008f;
-                    tB = 1.0f; tG = 1.0f;
-                } else if (rr < 31.0f) {
-                    L *= 0.5f;
-                }
-            }
-            const float a = std::clamp(0.5f - dF, 0.0f, 1.0f);
-            std::uint8_t* p = &img.rgba[(static_cast<std::size_t>(py) * img.width + px) * 4];
-            p[0] = hc::ui::linearToSrgb8(std::min(1.0f, L * tR));
-            p[1] = hc::ui::linearToSrgb8(std::min(1.0f, L * tG));
-            p[2] = hc::ui::linearToSrgb8(std::min(1.0f, L * tB));
-            p[3] = static_cast<std::uint8_t>(std::lround(a * 255.0f));
         }
     }
     return img;
+}
+
+hc::ui::Canvas frameCanvas(float pixelW, float pixelH) noexcept {
+    hc::ui::Canvas c{};
+    c.scale = std::min(pixelW / frame::kW, pixelH / frame::kH);
+    c.offsetX = std::round((pixelW - frame::kW * c.scale) * 0.5f);
+    c.offsetY = std::round((pixelH - frame::kH * c.scale) * 0.5f);
+    c.pixelW = pixelW;
+    c.pixelH = pixelH;
+    return c;
+}
+
+hc::ui::Canvas contentCanvas(const hc::ui::Canvas& f, const PanelDef& def) noexcept {
+    hc::ui::Canvas c = f;
+    c.scale = f.scale * def.frame.s;
+    c.offsetX = f.offsetX + f.scale * def.frame.ox;
+    c.offsetY = f.offsetY + f.scale * def.frame.oy;
+    return c;
 }
 
 // =====================================================================================================
@@ -231,60 +197,17 @@ void PanelView::sample(PanelBinding& b) {
 
 void PanelView::draw(Renderer& r, PanelBinding& b, const PanelController& c) {
     sample(b);
-    drawChassisLights(r);
+    const hc::ui::Canvas frameC = r.canvas();   // the caller's canvas maps frame pixels to the window
+    drawTopStrip(r, b, c);
+    drawSidePanels(r, b, c);
+    r.setCanvas(contentCanvas(frameC, def_));
     for (std::size_t i = 0; i < def_.widgets.size(); ++i) {
         const Hit h = c.active().t != Hit::T::None ? c.active() : c.hover();
         const bool hot = h.w == static_cast<int>(i) && h.t != Hit::T::None;
         if (isShown(def_.widgets[i], b)) drawWidget(r, b, def_.widgets[i], hot);
     }
-    drawTopBar(r, b, c);
-    drawBottomBar(r, b, c);
     if (c.menuOpen()) drawPresetMenu(r, b, c);
-}
-
-void PanelView::drawChassisLights(Renderer& r) {
-    // Light strip set into the outer frame: electric cyan down the left, molten orange down the
-    // right, blending across the top and bottom runs. Drawn as smooth shaded strips + corner arcs.
-    const float in = 26, rad = 100;
-    const float L = in, T = in, Rr = def_.w - in, B = def_.h - in;
-    auto mixc = [](Rgba a, Rgba b, float t) { return Rgba{a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1.0f}; };
-    auto colourAt = [&](float x) { return mixc(kCyan, kOrange, std::clamp((x - def_.w * 0.29f) / (def_.w * 0.42f), 0.0f, 1.0f)); };
-    // one straight run from (x0,y0) to (x1,y1) (axis-aligned), core + soft falloff both sides
-    auto run = [&](float x0, float y0, float x1, float y1) {
-        const bool horiz = std::fabs(y1 - y0) < 0.5f;
-        const int pieces = horiz ? 24 : 1;
-        for (int k = 0; k < pieces; ++k) {
-            const float t0 = static_cast<float>(k) / pieces, t1 = static_cast<float>(k + 1) / pieces;
-            const float ax = x0 + (x1 - x0) * t0, ay = y0 + (y1 - y0) * t0, bx = x0 + (x1 - x0) * t1, by = y0 + (y1 - y0) * t1;
-            const Rgba ca = colourAt(ax), cb = colourAt(bx);
-            const struct { float w0, w1, a0, a1; } bands[3] = {{0, 2.4f, 1.0f, 0.9f}, {2.4f, 9, 0.45f, 0.12f}, {9, 30, 0.12f, 0.0f}};
-            for (const auto& bd : bands)
-                for (float side : {-1.0f, 1.0f}) {
-                    float qx[4], qy[4];
-                    if (horiz) {
-                        qx[0] = ax; qx[1] = bx; qx[2] = bx; qx[3] = ax;
-                        qy[0] = ay + side * bd.w0; qy[1] = by + side * bd.w0; qy[2] = by + side * bd.w1; qy[3] = ay + side * bd.w1;
-                    } else {
-                        qy[0] = ay; qy[1] = by; qy[2] = by; qy[3] = ay;
-                        qx[0] = ax + side * bd.w0; qx[1] = bx + side * bd.w0; qx[2] = bx + side * bd.w1; qx[3] = ax + side * bd.w1;
-                    }
-                    const Rgba cols[4] = {ca.withAlpha(bd.a0), cb.withAlpha(bd.a0), cb.withAlpha(bd.a1), ca.withAlpha(bd.a1)};
-                    r.colorQuad(qx, qy, cols, Blend::Add, true);
-                }
-        }
-    };
-    run(L + rad, T, Rr - rad, T);
-    run(L + rad, B, Rr - rad, B);
-    run(L, T + rad, L, B - rad);
-    run(Rr, T + rad, Rr, B - rad);
-    const struct { float cx, cy, a0; Rgba c; } corners[4] = {
-        {L + rad, T + rad, -0.5f * kPi, kCyan}, {Rr - rad, T + rad, 0.0f, kOrange},
-        {Rr - rad, B - rad, 0.5f * kPi, kOrange}, {L + rad, B - rad, -kPi, kCyan}};
-    for (const auto& c : corners) {
-        r.arc(c.cx, c.cy, rad, 40, c.a0, c.a0 + 0.5f * kPi, c.c.withAlpha(0.06f), true);
-        r.arc(c.cx, c.cy, rad, 16, c.a0, c.a0 + 0.5f * kPi, c.c.withAlpha(0.22f), true);
-        r.arc(c.cx, c.cy, rad, 4.8f, c.a0, c.a0 + 0.5f * kPi, c.c.withAlpha(0.95f), true);
-    }
+    r.setCanvas(frameC);
 }
 
 void PanelView::drawWidget(Renderer& r, PanelBinding& b, const Widget& w, bool hot) {
@@ -1132,22 +1055,18 @@ void PanelView::drawPad(Renderer& r, PanelBinding& b, const Widget& w, bool hot)
     r.text(TextStyle::Caption, buf, bx.right() - 16, bx.y + 34, kText, Align::Right);
 }
 
-void PanelView::drawTopBar(Renderer& r, PanelBinding& b, const PanelController& c) {
-    // crown + title
-    const float cx0 = 330, cy0 = 122;
-    const float xs[8] = {cx0 - 58, cx0 - 66, cx0 - 30, cx0, cx0 + 30, cx0 + 66, cx0 + 58, cx0 - 58};
-    const float ys[8] = {cy0 + 34, cy0 - 30, cy0 - 2, cy0 - 46, cy0 - 2, cy0 - 30, cy0 + 34, cy0 + 34};
-    r.polyline(xs, ys, 8, 14, kAmber.withAlpha(0.22f), Blend::Add, true);
-    r.polyline(xs, ys, 8, 6, kAmber, Blend::Over, true);
-    if (def_.w >= 3000.0f && !def_.twoLineTitle) {
-        r.text(TextStyle::Heading, "HYBRID ELITE MAFIA", 420, 148, kAmber, Align::Left, TextFx::NeonCrisp);
-        const float tw = r.textWidth(TextStyle::Heading, "HYBRID ELITE MAFIA ");
-        r.text(TextStyle::Heading, "// " + def_.name, 420 + tw, 148, rgb8(0xFFA65A), Align::Left, TextFx::NeonCrisp, def_.preset.x - 50 - (420 + tw));
-    } else {   // compact plate: brand line over the plug-in name
-        const float right = std::min(def_.preset.x, def_.undo.x) - 50;
-        r.text(TextStyle::Title, "HYBRID ELITE MAFIA", 420, 108, kAmber, Align::Left, TextFx::NeonCrisp, right - 420);
-        r.text(TextStyle::Heading, def_.name, 420, 182, rgb8(0xFFA65A), Align::Left, TextFx::NeonCrisp, right - 420);
+void PanelView::drawTopStrip(Renderer& r, PanelBinding& b, const PanelController& c) {
+    // title like Steven's EQ example: "HEM" in molten orange, the plug-in name in engraved silver
+    std::string head = "HEM", rest = def_.name;
+    if (rest.rfind("HEM ", 0) == 0) rest = rest.substr(4); else head.clear();
+    float x = frame::titleX;
+    if (!head.empty()) {
+        r.text(TextStyle::Display, head, x, frame::titleBase, kAmber, Align::Left, TextFx::NeonCrisp);
+        x += r.textWidth(TextStyle::Display, head + "  ");
     }
+    r.text(TextStyle::Display, rest, x, frame::titleBase, rgb8(0xB9C0CA), Align::Left, TextFx::Shadowed, frame::titleX + frame::titleMaxW - x);
+    // brand, chrome-white with a cold edge, right of the emblem
+    r.text(TextStyle::Heading, "HYBRID ELITE MAFIA", frame::brandR, frame::brandBase, rgb8(0xDCE6F2), Align::Right, TextFx::Shadowed, frame::brandMaxW);
     // square machined key with a thin rim
     auto key = [&](const Box& bx, Hit::T t, Rgba rim, bool lit) {
         const bool hot = c.hover().t == t || c.active().t == t;
@@ -1159,27 +1078,27 @@ void PanelView::drawTopBar(Renderer& r, PanelBinding& b, const PanelController& 
     };
     const Rgba rimDim = rgb8(0x343840);
     // preset strip
-    r.fillRound(R(def_.preset), 12, rgb8(0x07080A), Blend::Over);
-    r.fillRound({def_.preset.x + 2, def_.preset.b() - 4, def_.preset.w - 4, 2}, 1, {1, 1, 1, 0.06f}, Blend::Add);
-    if (c.hover().t == Hit::T::Preset) r.glow(R(def_.preset).inset(4), 12, 10, kCyan.withAlpha(0.15f), true);
+    r.fillRound(R(frame::preset), 12, rgb8(0x07080A), Blend::Over);
+    r.fillRound({frame::preset.x + 2, frame::preset.b() - 4, frame::preset.w - 4, 2}, 1, {1, 1, 1, 0.06f}, Blend::Add);
+    if (c.hover().t == Hit::T::Preset) r.glow(R(frame::preset).inset(4), 12, 10, kCyan.withAlpha(0.15f), true);
     const auto names = b.presetNames();
     const int cur = b.currentPreset();
     std::string pn = (cur >= 0 && cur < static_cast<int>(names.size())) ? names[static_cast<std::size_t>(cur)] : "Init";
     if (b.modified()) pn += " *";
-    r.text(TextStyle::Title, pn, def_.preset.x + 32, def_.preset.cy() + 16, kTextBright, Align::Left, TextFx::Shadowed, def_.preset.w - 56);
-    key(def_.presetPrev, Hit::T::PresetPrev, rimDim, false);
-    key(def_.presetNext, Hit::T::PresetNext, rimDim, false);
-    key(def_.presetSave, Hit::T::PresetSave, rimDim, false);
-    key(def_.undo, Hit::T::Undo, rimDim, false);
-    key(def_.redo, Hit::T::Redo, rimDim, false);
+    r.text(TextStyle::Title, pn, frame::preset.x + 32, frame::preset.cy() + 16, kTextBright, Align::Left, TextFx::Shadowed, frame::preset.w - 56);
+    key(frame::presetPrev, Hit::T::PresetPrev, rimDim, false);
+    key(frame::presetNext, Hit::T::PresetNext, rimDim, false);
+    key(frame::presetSave, Hit::T::PresetSave, rimDim, false);
+    key(frame::undo, Hit::T::Undo, rimDim, false);
+    key(frame::redo, Hit::T::Redo, rimDim, false);
     {
-        const float px = def_.presetPrev.cx(), py = def_.presetPrev.cy();
+        const float px = frame::presetPrev.cx(), py = frame::presetPrev.cy();
         const float lx[3] = {px + 9, px - 11, px + 9}, ly[3] = {py - 20, py, py + 20};
         r.polyline(lx, ly, 3, 5, kText, Blend::Over);
-        const float nx = def_.presetNext.cx();
+        const float nx = frame::presetNext.cx();
         const float rx[3] = {nx - 9, nx + 11, nx - 9};
         r.polyline(rx, ly, 3, 5, kText, Blend::Over);
-        const float sx = def_.presetSave.cx(), sy = def_.presetSave.cy();
+        const float sx = frame::presetSave.cx(), sy = frame::presetSave.cy();
         r.fillRound({sx - 22, sy - 2.5f, 44, 5}, 2.5f, kText, Blend::Over);
         r.fillRound({sx - 2.5f, sy - 22, 5, 44}, 2.5f, kText, Blend::Over);
         // undo / redo hooked arrows
@@ -1193,47 +1112,48 @@ void PanelView::drawTopBar(Renderer& r, PanelBinding& b, const PanelController& 
             const float hx[3] = {x - dir * 28, x - dir * 18, x - dir * 6}, hy[3] = {y - 22, y - 12, y - 24};
             r.polyline(hx, hy, 3, 5, col, Blend::Over);
         };
-        hook(def_.undo.cx(), def_.undo.cy(), 1.0f, kText);
-        hook(def_.redo.cx(), def_.redo.cy(), -1.0f, kTextDim);
+        hook(frame::undo.cx(), frame::undo.cy(), 1.0f, kText);
+        hook(frame::redo.cx(), frame::redo.cy(), -1.0f, kTextDim);
     }
     // BYPASS: orange-rimmed key, lights up when engaged
     const bool byp = b.value(def_.bypassParam) >= 0.5f;
-    key(def_.bypass, Hit::T::Bypass, kAmber.withAlpha(byp ? 1.0f : 0.75f), byp);
-    if (byp) r.fillRound(R(def_.bypass).inset(3), 11, kAmber.withAlpha(0.18f), Blend::Over, true);
-    r.text(TextStyle::Title, "BYPASS", def_.bypass.cx(), def_.bypass.cy() + 16, byp ? rgb8(0xFFD3A0) : kAmber, Align::Center, TextFx::NeonCrisp);
+    key(frame::bypass, Hit::T::Bypass, kAmber.withAlpha(byp ? 1.0f : 0.75f), byp);
+    if (byp) r.fillRound(R(frame::bypass).inset(3), 11, kAmber.withAlpha(0.18f), Blend::Over, true);
+    r.text(TextStyle::Title, "BYPASS", frame::bypass.cx(), frame::bypass.cy() + 16, byp ? rgb8(0xFFD3A0) : kAmber, Align::Center, TextFx::NeonCrisp);
 }
 
-void PanelView::hMeter(Renderer& r, Box box, float dbL, float dbR) {
-    r.fillRound(R(box), 6, rgb8(0x010203), Blend::Over);
-    const int segs = 44;
-    const float sw = (box.w - 10) / segs, rowH = (box.h - 12) * 0.5f;
-    for (int row = 0; row < 2; ++row) {
-        const float f = std::clamp(((row ? dbR : dbL) + 60.0f) / 60.0f, 0.0f, 1.0f);
+void PanelView::vMeter(Renderer& r, Box box, float dbL, float dbR) {
+    r.fillRound(R(box), 8, rgb8(0x010203), Blend::Over);
+    const int segs = 40;
+    const float colW = (box.w - 14) * 0.5f, sh = (box.h - 10) / segs;
+    for (int col = 0; col < 2; ++col) {
+        const float f = std::clamp(((col ? dbR : dbL) + 60.0f) / 60.0f, 0.0f, 1.0f);
         for (int i = 0; i < segs; ++i) {
-            const float t = (static_cast<float>(i) + 0.5f) / segs;
+            const float t = (static_cast<float>(i) + 0.5f) / segs;   // 0 = bottom
             const Rgba sc = t > 0.92f ? rgb8(0xFF3B1F) : t > 0.82f ? rgb8(0xFF7A1E) : t > 0.70f ? rgb8(0xFFC233) : kCyan;
             const bool lit = t < f;
-            r.fillRound({box.x + 5 + sw * static_cast<float>(i) + 1, box.y + 4 + row * (rowH + 4), sw - 2.5f, rowH}, 1.0f,
-                        lit ? sc : sc.withAlpha(0.13f), Blend::Over, lit);
+            r.fillRound({box.x + 5 + col * (colW + 4), box.b() - 5 - sh * static_cast<float>(i + 1) + 1, colW, sh - 2.5f}, 1.5f,
+                        lit ? sc : sc.withAlpha(0.07f), Blend::Over, lit);
         }
     }
 }
 
-void PanelView::drawBottomBar(Renderer& r, PanelBinding& b, const PanelController& c) {
+void PanelView::drawSidePanels(Renderer& r, PanelBinding& b, const PanelController& c) {
     const auto& di = b.desc(def_.inputParam);
     const auto& dout = b.desc(def_.outputParam);
     const bool hi = c.hover().t == Hit::T::InTrim || c.active().t == Hit::T::InTrim;
     const bool ho = c.hover().t == Hit::T::OutTrim || c.active().t == Hit::T::OutTrim;
-    const float base = def_.inputMeter.cy() + 15;
-    r.text(TextStyle::Title, formatValue(di, b.value(def_.inputParam)), def_.inputTrim.x + 10, base, hi ? kCyan : kAmber, Align::Left, TextFx::NeonCrisp);
-    r.text(TextStyle::Title, "INPUT", def_.inputMeter.x - 18, base, kTextBright, Align::Right, TextFx::Shadowed);
-    hMeter(r, def_.inputMeter, b.meter(def_.meterInL), b.meter(def_.meterInR));
-    hMeter(r, def_.outputMeter, b.meter(def_.meterOutL), b.meter(def_.meterOutR));
-    r.text(TextStyle::Title, "OUTPUT", def_.outputMeter.x - 18, base, kTextBright, Align::Right, TextFx::Shadowed);
-    r.text(TextStyle::Title, formatValue(dout, b.value(def_.outputParam)), def_.outputTrim.r() - 10, base, ho ? kCyan : kAmber, Align::Right, TextFx::NeonCrisp);
-    const bool compact = def_.w < 3000.0f;
-    r.text(compact ? TextStyle::Tab : TextStyle::Heading, def_.footer, def_.footerBox.cx(), def_.footerBox.cy() + (compact ? 18 : 24),
-           rgb8(0xD8B07E), Align::Center, TextFx::Shadowed, def_.footerBox.w);
+    auto panel = [&](const Box& pn, const Box& trim, const Box& meter, const char* label, const ParamDesc& d, int param, bool hot, float dbL, float dbR) {
+        r.text(TextStyle::Title, label, pn.cx(), pn.y + 56, kCyan, Align::Center, TextFx::NeonCrisp);
+        r.fillRound(R(trim), 12, rgb8(0x07080A), Blend::Over);
+        if (hot) r.glow(R(trim).inset(4), 12, 10, kCyan.withAlpha(0.18f), true);
+        r.text(TextStyle::Title, formatValue(d, b.value(param)), trim.cx(), trim.cy() + 16, hot ? kCyan : kAmber, Align::Center, TextFx::NeonCrisp, trim.w - 16);
+        vMeter(r, meter, dbL, dbR);
+        r.text(TextStyle::Caption, "L", meter.x + meter.w * 0.27f, meter.b() + 30, kTextDim, Align::Center);
+        r.text(TextStyle::Caption, "R", meter.x + meter.w * 0.73f, meter.b() + 30, kTextDim, Align::Center);
+    };
+    panel(frame::inPanel, frame::inTrim, frame::inMeter, "INPUT", di, def_.inputParam, hi, b.meter(def_.meterInL), b.meter(def_.meterInR));
+    panel(frame::outPanel, frame::outTrim, frame::outMeter, "OUTPUT", dout, def_.outputParam, ho, b.meter(def_.meterOutL), b.meter(def_.meterOutR));
 }
 
 void PanelView::drawPresetMenu(Renderer& r, PanelBinding& b, const PanelController& c) {

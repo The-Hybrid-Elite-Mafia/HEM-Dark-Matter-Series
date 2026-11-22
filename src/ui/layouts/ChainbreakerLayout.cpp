@@ -106,6 +106,7 @@ PanelDef chainbreakerPanel() {
     { Widget l; l.kind = Kind::Label; l.label = "UTILITY ROUTING"; l.box = {3000, 1660, 400, 40}; l.size = 0.5f; d.widgets.push_back(l); }
     const char* un[4] = {"PRE", "SOFT", "HARD", "MST"};
     for (int k = 0; k < 4; ++k) d.widgets.push_back(button(P(UtilRoute), {2765 + 225.0f * static_cast<float>(k), 1720, 200, 80}, un[k], Accent::Cyan, k));
+    fitFrame(d);
     return d;
 }
 
