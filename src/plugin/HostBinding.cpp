@@ -61,7 +61,7 @@ void HostBinding::endEdit(int i) {
 
 float HostBinding::meter(int source) const {
     if (ui::PanelBinding* l = live_ ? live_() : nullptr) return l->meter(source);
-    return -120.0f;   // not connected to a running engine: meters rest
+    return shadowBinding_->meter(source);   // no audio flowing (stopped, bypassed, not connected): meters at rest
 }
 
 void HostBinding::feed(ui::DisplayKind k, int source, std::vector<float>& out) const {
@@ -129,6 +129,7 @@ bool HostBinding::undo() {
     if (historyPos_ == 0) return false;
     --historyPos_;
     apply(history_[historyPos_]);
+    restorePresetMark();
     checkLatency();
     return true;
 }
@@ -137,6 +138,7 @@ bool HostBinding::redo() {
     if (historyPos_ + 1 >= history_.size()) return false;
     ++historyPos_;
     apply(history_[historyPos_]);
+    restorePresetMark();
     checkLatency();
     return true;
 }
@@ -154,6 +156,7 @@ void HostBinding::stateReloaded() {
     history_.assign(1, snapshot());
     historyPos_ = 0;
     baseline_ = history_.front();
+    historyMark_.assign(1, PresetMark{current_, baseline_});
     syncShadow();
     lastLatency_ = shadow_->latency();
 }
@@ -191,9 +194,18 @@ void HostBinding::commit() {
     auto now = snapshot();
     if (!history_.empty() && history_[historyPos_] == now) return;
     history_.resize(historyPos_ + 1);
+    historyMark_.resize(historyPos_ + 1);
     history_.push_back(std::move(now));
-    if (history_.size() > kHistoryMax) history_.erase(history_.begin());
+    historyMark_.push_back(PresetMark{current_, baseline_});
+    if (history_.size() > kHistoryMax) { history_.erase(history_.begin()); historyMark_.erase(historyMark_.begin()); }
     historyPos_ = history_.size() - 1;
+}
+
+// Undo / redo also bring back which preset was loaded at that step, so the name and its "*" match the sound.
+void HostBinding::restorePresetMark() {
+    if (historyPos_ >= historyMark_.size()) return;
+    current_ = historyMark_[historyPos_].preset;
+    baseline_ = historyMark_[historyPos_].baseline;
 }
 
 void HostBinding::checkLatency() {

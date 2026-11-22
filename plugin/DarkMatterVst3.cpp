@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -207,6 +208,9 @@ public:
             done += n;
         }
         out.silenceFlags = 0;
+        // Faceplate meters show live readings only while audio is really flowing through an active engine.
+        bypassed_.store(engine_->paramCount() > dm::G_Bypass && engine_->get(dm::G_Bypass) >= 0.5f, std::memory_order_relaxed);
+        lastProcessMs_.store(nowMs(), std::memory_order_relaxed);
         return kResultOk;
     }
 
@@ -219,9 +223,20 @@ public:
         return writeText(state, plugin::stateText(*engine_)) ? kResultOk : kResultFalse;
     }
 
-    [[nodiscard]] ui::PanelBinding* liveBinding() const noexcept { return liveBinding_.get(); }
+    // The live engine's meters while audio flows through it; nullptr when the host has stopped calling
+    // process() (transport stopped) or BYPASS is on, so the faceplate falls back to resting meters
+    // instead of freezing on the last reading.
+    [[nodiscard]] ui::PanelBinding* liveBinding() const noexcept {
+        const std::int64_t last = lastProcessMs_.load(std::memory_order_relaxed);
+        if (last == 0 || nowMs() - last > kLiveStaleMs || bypassed_.load(std::memory_order_relaxed)) return nullptr;
+        return liveBinding_.get();
+    }
 
 private:
+    static constexpr std::int64_t kLiveStaleMs = 300;
+    static std::int64_t nowMs() noexcept {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
     void unregister() {
         std::lock_guard lock(live().mutex);
         if (token_ != 0) live().map.erase(token_);
@@ -233,6 +248,8 @@ private:
     std::unique_ptr<ui::PanelBinding> liveBinding_;   // meters / live displays for the faceplate (read from the UI thread)
     std::int64_t token_ = 0;
     bool keyActive_ = false;   // host switched the sidechain input on
+    std::atomic<std::int64_t> lastProcessMs_{0};   // steady-clock ms of the last process() call that ran audio
+    std::atomic<bool> bypassed_{false};
     double sampleRate_ = 48000.0;
     int32 maxBlock_ = 1024;
 };

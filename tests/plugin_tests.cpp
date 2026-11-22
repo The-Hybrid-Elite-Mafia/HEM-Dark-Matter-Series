@@ -192,10 +192,62 @@ void testHostBinding() {
     }
 }
 
+// Faceplate meters: live readings while audio flows; when the host stops calling process() or BYPASS is
+// on, the wrapper hands the faceplate no live engine and the meters must fall back to rest, not freeze.
+void testUndoPresetName() {
+    section("IN A HOST: undo brings back the preset name");
+    const PluginInfo& p = plugins()[3];   // HEM COMP
+    auto shadow = p.create();
+    FakeHost host(*shadow);
+    HostBinding b(p, host, tempDir("undo-name"));
+    b.loadPreset(0);
+    int comp = -1;
+    for (std::size_t i = 0; i < b.paramCount(); ++i) if (b.desc(int(i)).id == "comp") comp = int(i);
+    check(comp >= 0, "found COMP", comp);
+    b.setValue(comp, 100.0f);
+    check(b.currentPreset() == 0 && b.modified(), "preset 1 changed: shows its name with *", b.currentPreset());
+    b.loadPreset(1);
+    check(b.currentPreset() == 1 && !b.modified(), "next preset loaded: its name, no *", b.currentPreset());
+    b.undo();
+    check(b.currentPreset() == 0, "undo: back to preset 1's name (index)", b.currentPreset());
+    check(b.modified(), "and its * (the change is back)", 1);
+    b.undo();
+    check(b.currentPreset() == 0 && !b.modified(), "undo again: preset 1 as loaded, no *", b.currentPreset());
+    b.redo();
+    b.redo();
+    check(b.currentPreset() == 1 && !b.modified(), "redo twice: next preset again, no *", b.currentPreset());
+}
+
+void testMetersRest() {
+    section("IN A HOST: meters rest when audio stops");
+    for (const auto& p : plugins()) {
+        auto running = p.create();
+        running->prepare(48000.0f, 512);
+        auto src = musicSignal(48000.0f, 1.0);
+        for (std::size_t o = 0; o + 512 <= src.l.size(); o += 512) running->process(&src.l[o], &src.r[o], 512, nullptr, nullptr);
+        auto liveB = running->binding();
+        auto rest = p.create();
+        rest->prepare(48000.0f, 512);
+        auto restB = rest->binding();
+        const auto def = p.panel();
+        auto shadow = p.create();
+        FakeHost host(*shadow);
+        dm::ui::PanelBinding* current = liveB.get();
+        HostBinding b(p, host, tempDir(p.slug), [&current]() -> dm::ui::PanelBinding* { return current; });
+        const float playing = b.meter(def.meterInL);
+        current = nullptr;   // transport stopped / bypassed
+        const float stopped = b.meter(def.meterInL);
+        check(playing > restB->meter(def.meterInL) + 20.0f, (std::string(p.name) + ": INPUT meter is live while audio flows (dB)").c_str(), playing);
+        check(stopped == restB->meter(def.meterInL), (std::string(p.name) + ": and rests when it stops (dB)").c_str(), stopped);
+    }
+}
+
 } // namespace
 
 void runPluginTests() {
     testCatalogue();
     testEngines();
     testHostBinding();
+    testMetersRest();
+    testUndoPresetName();
 }

@@ -64,6 +64,7 @@ private:
     void commit();
     void checkLatency();
     void reloadUser();
+    void restorePresetMark();
 
     const PluginInfo& info_;
     HostParams& host_;
@@ -76,6 +77,8 @@ private:
     std::vector<bool> editing_;
     std::vector<std::vector<float>> history_;
     std::size_t historyPos_ = 0;
+    struct PresetMark { int preset = 0; std::vector<float> baseline; };
+    std::vector<PresetMark> historyMark_;   // which preset was loaded at each history step
     std::vector<float> baseline_;
     int current_ = 0, lastAction_ = -1, lastLatency_ = -1;
     std::string error_;
