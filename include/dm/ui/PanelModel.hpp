@@ -84,24 +84,24 @@ struct Widget {
 
 // ---- The HEM frame (Steven's blank faceplate template, straightened, 3840 x 2160) ----------------------
 // Every faceplate sits in the same frame: chassis, light strips and the hooded crown emblem come from the
-// art (assets/faceplates/HEM-Frame-4K.jpg); the plug-in's own controls are placed on its glass bed. All
+// art (assets/faceplates/HEM-Board-4K.jpg); the plug-in's own controls are placed on its glass bed. All
 // boxes below are in frame pixels, measured on that art.
 namespace frame {
 inline constexpr float kW = 3840.0f, kH = 2160.0f;
-inline constexpr Box bed{265, 482, 3455, 1456};        // glass bed inside the chassis (circuit board under glass)
-inline constexpr Box emblem{1716, 168, 457, 458};      // hooded crown emblem, dips into the bed top
-inline constexpr Box content{560, 645, 2865, 1270};    // where a plug-in's own controls go (clear of emblem + side panels)
+inline constexpr Box bed{230, 230, 3380, 1690};        // Steven's board: circuit board under clear glass inside the chassis
+inline constexpr Box emblem{1720, 0, 400, 545};        // hooded crown emblem, dips into the board top
+inline constexpr Box content{560, 645, 2760, 1270};    // where a plug-in's own controls go (clear of emblem + side panels)
 inline constexpr Box inPanel{320, 645, 200, 1270};     // INPUT side panel
-inline constexpr Box outPanel{3465, 645, 200, 1270};   // OUTPUT side panel
-inline constexpr float titleX = 395, titleBase = 335, titleMaxW = 1290;   // "HEM <NAME>" (clear of the corner screw at 345,309)
-inline constexpr float brandR = 3540, brandBase = 335, brandMaxW = 1300;  // "HYBRID ELITE MAFIA" (clear of the corner screw at 3588,330)
+inline constexpr Box outPanel{3360, 645, 200, 1270};   // OUTPUT side panel (inside the board's right edge, x 3610)
+inline constexpr float titleX = 345, titleBase = 335, titleMaxW = 1320;   // "HEM <NAME>"
+inline constexpr float brandR = 3560, brandBase = 335, brandMaxW = 1200;  // "HYBRID ELITE MAFIA"
 inline constexpr Box undo{330, 366, 116, 104}, redo{460, 366, 116, 104};
 inline constexpr Box preset{604, 366, 640, 104}, presetPrev{1258, 366, 104, 104}, presetNext{1372, 366, 104, 104};
 inline constexpr Box presetSave{1500, 366, 116, 104};
-inline constexpr Box bypass{3450, 362, 240, 112};
+inline constexpr Box bypass{3320, 362, 240, 112};
 inline constexpr float topKeysX = 2240, topKeysStep = 112, topKeyW = 100;   // extra top-strip keys (e.g. quick chains 1-8)
-inline constexpr Box inTrim{330, 720, 180, 90}, outTrim{3475, 720, 180, 90};
-inline constexpr Box inMeter{380, 840, 80, 1040}, outMeter{3525, 840, 80, 1040};
+inline constexpr Box inTrim{330, 720, 180, 90}, outTrim{3370, 720, 180, 90};
+inline constexpr Box inMeter{380, 840, 80, 1040}, outMeter{3420, 840, 80, 1040};
 } // namespace frame
 
 // Where a plug-in's own design space sits in the frame: frame = o + s * design.

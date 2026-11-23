@@ -119,8 +119,11 @@ int main(int argc, char** argv) {
     if (!fonts) { std::printf("FAIL fonts: %s\n", err.c_str()); return 3; }
     auto art = hc::ui::loadFaceplateArt(assets / "faceplates" / "Main-Faceplate.png", &err);
     if (!art) { std::printf("FAIL parts art: %s\n", err.c_str()); return 3; }
-    const hc::ui::PartsAtlas parts = hc::ui::buildPartsAtlas(art->master);
-    auto frameArt = hc::ui::loadImageFile(assets / "faceplates" / "HEM-Frame-4K.jpg", &err);
+    const hc::ui::HemPartImages hemParts = hc::ui::loadHemParts(assets / "parts");
+    const bool hem = hemParts.complete();
+    if (!hem) { std::printf("FAIL parts sheet: assets/parts is missing pictures\n"); return 3; }
+    const hc::ui::PartsAtlas parts = hc::ui::buildPartsAtlas(art->master, &hemParts);
+    auto frameArt = hc::ui::loadImageFile(assets / "faceplates" / "HEM-Board-4K.jpg", &err);
     if (!frameArt) { std::printf("FAIL frame art: %s\n", err.c_str()); return 3; }
 
     // ---- engines ----
@@ -193,6 +196,7 @@ int main(int argc, char** argv) {
         for (const auto& is : issues) std::printf("LAYOUT %-18s %s\n", job.name.c_str(), is.what.c_str());
         if (!issues.empty()) ++failures;
         PanelView view(job.def);
+        view.setHemParts(hem);
         job.runAudio([&] { view.sample(job.binding()); });
 
         hc::ui::Renderer r;

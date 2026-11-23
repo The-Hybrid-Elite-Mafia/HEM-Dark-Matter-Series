@@ -21,7 +21,7 @@ foreach ($f in 'bin\dm_tests.exe','bin\dm_vst3_hosttest.exe','HOW-TO-TEST.txt','
 }
 $dll = Get-ChildItem $vst3 -Recurse -Filter '*.vst3' -File -ErrorAction SilentlyContinue | Select-Object -First 1
 Check ($null -ne $dll) "plug-in installed in $vst3"
-foreach ($f in 'Contents\Resources\fonts\Barlow-Regular.ttf','Contents\Resources\faceplates\Main-Faceplate.png','Contents\Resources\faceplates\HEM-Frame-4K.jpg') {
+foreach ($f in 'Contents\Resources\fonts\Barlow-Regular.ttf','Contents\Resources\faceplates\Main-Faceplate.png','Contents\Resources\faceplates\HEM-Board-4K.jpg','Contents\Resources\parts\knob-cyan.png') {
     Check (Test-Path (Join-Path $vst3 $f)) "faceplate art in the bundle: $f"
 }
 Check (Test-Path $presets) 'presets folder created'

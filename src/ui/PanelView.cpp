@@ -102,59 +102,113 @@ hc::ui::Image renderPlate(const PanelDef& def, float ppu, const hc::ui::Image& f
         const float l = std::sqrt(nx * nx + ny * ny) + 1e-6f;
         nx /= l; ny /= l;
     };
-    for (const Shape& sh : shapes) {
-        const float margin = 26.0f;   // contact shadow round each piece
-        const int x0 = std::max(0, static_cast<int>((sh.b.x - margin) * ppu)), x1 = std::min(static_cast<int>(W), static_cast<int>((sh.b.r() + margin) * ppu) + 1);
-        const int y0 = std::max(0, static_cast<int>((sh.b.y - margin) * ppu)), y1 = std::min(static_cast<int>(H), static_cast<int>((sh.b.b() + margin) * ppu) + 1);
-        for (int py = y0; py < y1; ++py) {
+    // Per-pixel painter over a box (frame pixels), linear light.
+    auto paint = [&](Box box, auto&& f) {
+        const int x0 = std::max(0, static_cast<int>(box.x * ppu)), x1 = std::min(static_cast<int>(W), static_cast<int>(box.r() * ppu) + 1);
+        const int y0 = std::max(0, static_cast<int>(box.y * ppu)), y1 = std::min(static_cast<int>(H), static_cast<int>(box.b() * ppu) + 1);
+        for (int py = y0; py < y1; ++py)
             for (int px = x0; px < x1; ++px) {
-                const float ux = (static_cast<float>(px) + 0.5f) / ppu, uy = (static_cast<float>(py) + 0.5f) / ppu;
-                const float d = sdRound(ux, uy, sh.b, sh.rad);
-                std::uint8_t* p = &img.rgba[(static_cast<std::size_t>(py) * W + px) * 4];
-                float R = hc::ui::srgb8ToLinear(p[0]), G = hc::ui::srgb8ToLinear(p[1]), B = hc::ui::srgb8ToLinear(p[2]);
-                if (d >= 0.0f) {   // outside: soft contact shadow on the bed
-                    const float k = 0.42f + 0.58f * std::clamp(d / margin, 0.0f, 1.0f);
-                    R *= k; G *= k; B *= k;
-                } else {
-                    float nx, ny;
-                    grad(ux, uy, sh.b, sh.rad, nx, ny);
-                    const float t = std::clamp((uy - sh.b.y) / sh.b.h, 0.0f, 1.0f);
-                    const float rim = std::clamp(1.0f + d / 4.0f, 0.0f, 1.0f);   // 4 px bevel at the cut edge
-                    const float lit = std::max(0.0f, bevelLight(-nx, -ny));
-                    if (sh.kind == 0) {
-                        // smoked glass panel over the circuit board: board still faintly visible, top sheen
-                        const float k = 0.30f;
-                        R = R * k + 0.0045f; G = G * k + 0.0055f; B = B * k + 0.0075f;
-                        const float sheen = 0.010f * (1.0f - t) * (1.0f - t);
-                        R += sheen; G += sheen; B += sheen * 1.15f;
-                        R += rim * (0.10f * lit + 0.012f); G += rim * (0.11f * lit + 0.014f); B += rim * (0.12f * lit + 0.018f);
-                    } else if (sh.kind == 1) {
-                        // raised brushed-metal mode plate
-                        float L = 0.030f - 0.011f * t + 0.015f * brushed(ux / fm.s, uy / fm.s);
-                        const float edge = std::clamp(1.0f + d / 7.0f, 0.0f, 1.0f);
-                        L += 0.13f * edge * lit - 0.012f * edge * std::max(0.0f, bevelLight(nx, ny));
-                        R = L; G = L; B = L * 1.05f;
-                    } else if (sh.kind == 2) {
-                        // deep display glass with a machined bezel ring
-                        float L = 0.010f + 0.008f * (1.0f - t);
-                        L *= 0.55f + 0.45f * std::clamp(std::min(uy - sh.b.y, ux - sh.b.x) / 22.0f, 0.0f, 1.0f);
-                        R = L; G = L * 1.18f; B = L * 1.45f;
-                        if (d > -3.0f) { R += 0.05f; G += 0.068f; B += 0.08f; }
-                    } else {
-                        // recessed well for the preset keys
-                        const float k = 0.25f;
-                        R *= k; G *= k; B *= k;
-                        R *= 0.55f + 0.45f * std::clamp((uy - sh.b.y) / 20.0f, 0.0f, 1.0f);
-                        G = R * 1.02f; B = R * 1.08f;
-                        if (d > -2.5f && uy > sh.b.cy()) { R += 0.06f; G += 0.06f; B += 0.065f; }
-                    }
-                }
-                p[0] = hc::ui::linearToSrgb8(std::min(1.0f, R));
-                p[1] = hc::ui::linearToSrgb8(std::min(1.0f, G));
-                p[2] = hc::ui::linearToSrgb8(std::min(1.0f, B));
-                p[3] = 255;
+                std::uint8_t* o = &img.rgba[(static_cast<std::size_t>(py) * W + static_cast<std::size_t>(px)) * 4];
+                float c[3] = {hc::ui::srgb8ToLinear(o[0]), hc::ui::srgb8ToLinear(o[1]), hc::ui::srgb8ToLinear(o[2])};
+                f((static_cast<float>(px) + 0.5f) / ppu, (static_cast<float>(py) + 0.5f) / ppu, c);
+                for (int k = 0; k < 3; ++k) o[k] = hc::ui::linearToSrgb8(std::clamp(c[k], 0.0f, 1.0f));
+                o[3] = 255;
             }
+    };
+    // Chamfered rectangle (cut corners), signed distance: negative inside.
+    auto sdChamfer = [](float x, float y, const Box& r, float cut) {
+        const float hx = r.w * 0.5f, hy = r.h * 0.5f;
+        const float qx = std::fabs(x - r.cx()), qy = std::fabs(y - r.cy());
+        const float box = std::max(qx - hx, qy - hy);
+        const float diag = (qx + qy - (hx + hy - cut)) * 0.70710678f;
+        return std::max(box, diag);
+    };
+    const float neonC[3] = {0.0f, 0.78f, 1.0f}, neonA[3] = {1.0f, 0.34f, 0.01f};   // (linear)
+    // Steven's board look: the panels are CLEAR glass plates (the board shows through) with cut corners, a thin steel
+    // bevel, a thin neon line (cyan top-left, amber bottom-right) and small screws; screens are darker glass in a
+    // chrome bezel; the preset keys keep their dark well.
+    for (const Shape& sh : shapes) {
+        if (sh.kind == 3) {   // recessed well for the preset keys
+            const float margin = 12.0f;
+            paint({sh.b.x - margin, sh.b.y - margin, sh.b.w + 2 * margin, sh.b.h + 2 * margin}, [&](float ux, float uy, float* c) {
+                const float d = sdRound(ux, uy, sh.b, sh.rad);
+                if (d >= 0.0f) { const float k = 0.6f + 0.4f * std::clamp(d / margin, 0.0f, 1.0f); for (int q = 0; q < 3; ++q) c[q] *= k; return; }
+                float R = c[0] * 0.25f;
+                R *= 0.55f + 0.45f * std::clamp((uy - sh.b.y) / 20.0f, 0.0f, 1.0f);
+                c[0] = R; c[1] = R * 1.02f; c[2] = R * 1.08f;
+                if (d > -2.5f && uy > sh.b.cy()) for (int q = 0; q < 3; ++q) c[q] += 0.06f;
+            });
+            continue;
         }
+        const bool screen = sh.kind == 2;
+        const Box& r = sh.b;
+        const float cut = std::min({screen ? 16.0f * fm.s : 40.0f * std::max(1.0f, fm.s), r.w * 0.22f, r.h * 0.22f}), reach = 16.0f;
+        paint({r.x - reach - 2, r.y - reach - 2, r.w + 2 * reach + 4, r.h + 2 * reach + 4}, [&](float x, float y, float* c) {
+            const float d = sdChamfer(x, y, r, cut);
+            const float t = ((x - r.x) / r.w + (y - r.y) / r.h) * 0.5f;   // 0 top-left .. 1 bottom-right
+            const float mixA = std::clamp((t - 0.46f) / 0.08f, 0.0f, 1.0f);
+            float nc[3];
+            for (int k = 0; k < 3; ++k) nc[k] = screen ? neonC[k] : neonC[k] * (1.0f - mixA) + neonA[k] * mixA;
+            const float bevelW = screen ? 7.0f : 6.0f;
+            if (d < 0.0f) {
+                if (screen && d < -bevelW) {
+                    const float v = 0.008f + 0.006f * std::clamp(1.0f - (y - r.y) / r.h, 0.0f, 1.0f);
+                    c[0] = c[0] * 0.10f + v; c[1] = c[1] * 0.10f + v * 1.18f; c[2] = c[2] * 0.10f + v * 1.45f;
+                } else if (!screen) {
+                    for (int k = 0; k < 3; ++k) c[k] *= 0.93f;
+                }
+                if (d >= -bevelW) {
+                    const float u = -d / bevelW;
+                    const float light = 0.5f + 0.5f * std::clamp(1.0f - 2.0f * t, -1.0f, 1.0f);
+                    const float v = 0.06f + 0.16f * light * (1.0f - 0.5f * u) + 0.05f * std::sin(u * kPi);
+                    for (int k = 0; k < 3; ++k) c[k] = v * (k == 2 ? 1.08f : 1.0f);
+                }
+            }
+            if (std::fabs(d) < 1.2f) for (int k = 0; k < 3; ++k) c[k] *= 0.35f;
+            const float line = std::fabs(d + bevelW + 2.0f);
+            const float core = std::clamp(1.0f - line / (screen ? 1.6f : 2.2f), 0.0f, 1.0f), glow = std::exp(-line / 7.0f) * (screen ? 0.18f : 0.30f);
+            const float g = d < -bevelW ? core * (screen ? 0.8f : 1.2f) + glow : core * 1.2f + glow * 0.4f;
+            for (int k = 0; k < 3; ++k) c[k] += nc[k] * g;
+            if (d >= 0.0f) {
+                const float k2 = 0.86f + 0.14f * std::clamp(d / reach, 0.0f, 1.0f);
+                for (int k = 0; k < 3; ++k) c[k] *= k2;
+            }
+        });
+        if (screen) continue;
+        const float sr = 8.0f, in = cut * 0.45f + sr + 8.0f;
+        for (auto [sx, sy] : {std::pair{r.x + in, r.y + in}, std::pair{r.r() - in, r.y + in}, std::pair{r.x + in, r.b() - in},
+                                    std::pair{r.r() - in, r.b() - in}}) {
+            paint({sx - sr - 4, sy - sr - 4, 2 * sr + 8, 2 * sr + 8}, [&](float x, float y, float* c) {
+                const float dx = x - sx, dy = y - sy, d = std::sqrt(dx * dx + dy * dy);
+                if (d > sr + 2.0f) return;
+                if (d > sr) { for (int k = 0; k < 3; ++k) c[k] *= 0.55f; return; }
+                const float n = (-dx * 0.6f - dy * 0.8f) / sr;
+                float v = 0.12f + 0.20f * std::max(0.0f, n);
+                if (std::fabs((dx - dy) * 0.7071f) < sr * 0.16f && d < sr * 0.8f) v *= 0.25f;
+                c[0] = v; c[1] = v * 1.02f; c[2] = v * 1.06f;
+            });
+        }
+    }
+    (void)grad;
+    // knobs that are always on the plate: a soft shadow where the chrome knob sits and a tick scale round it
+    for (const auto& w : def.widgets) {
+        if ((w.kind != Kind::Knob && w.kind != Kind::Trim) || w.showParam >= 0 || w.inFrame || w.box.w <= 0) continue;
+        const Box dial = fm.toFrame(w.box);
+        const float cx = dial.cx(), cy = dial.cy(), R0 = dial.w * 0.5f;
+        paint({dial.x - R0 * 0.3f, dial.y - R0 * 0.3f, dial.w + R0 * 0.6f, dial.h + R0 * 0.6f}, [&](float x, float y, float* c) {
+            const float dx = x - cx - R0 * 0.04f, dy = y - cy - R0 * 0.07f, dd = std::sqrt(dx * dx + dy * dy) / R0;
+            if (dd < 1.15f) { const float shd = 1.0f - 0.55f * (1.15f - dd) / 1.15f; for (int q = 0; q < 3; ++q) c[q] *= shd; }
+            const float rx = x - cx, ry = y - cy, rr = std::sqrt(rx * rx + ry * ry) / R0;
+            const float ang = std::atan2(rx, -ry);
+            if (ang < kKnobMin - 0.05f || ang > kKnobMax + 0.05f) return;
+            const float step = (kKnobMax - kKnobMin) / 10.0f;
+            const float idx = (ang - kKnobMin) / step, nearest = std::round(idx);
+            const bool major = nearest == 0.0f || nearest == 10.0f || nearest == 5.0f;
+            if (rr < 1.06f || rr > (major ? 1.22f : 1.17f)) return;
+            const float distPx = std::fabs(idx - nearest) * step * rr * R0;
+            const float a = std::clamp(1.0f - (distPx - 1.2f * fm.s) / 1.2f, 0.0f, 1.0f) * (major ? 0.85f : 0.6f);
+            for (int q = 0; q < 3; ++q) c[q] = c[q] * (1.0f - a) + 0.62f * a;
+        });
     }
     return img;
 }
@@ -244,7 +298,7 @@ void PanelView::drawWidget(Renderer& r, PanelBinding& b, const Widget& w, bool h
 void PanelView::drawBay(Renderer& r, const Widget& w) {
     const Rgba c = accentColour(w.accent);
     // short accent light-pipe centred on the top edge of the panel
-    if (w.screen.w <= 0 && w.label.empty()) {   // control deck panels carry a short accent light-pipe on the top edge
+    if (!hem_ && w.screen.w <= 0 && w.label.empty()) {   // control deck panels carry a short accent light-pipe on the top edge
         const float lw = std::min(w.box.w * 0.5f, 440.0f);
         const Rect pipe{w.box.cx() - lw * 0.5f, w.box.y - 2, lw, 4};
         r.glow(pipe, 2.0f, 14, c.withAlpha(0.25f), true);
@@ -267,6 +321,21 @@ void PanelView::drawKnob(Renderer& r, PanelBinding& b, const Widget& w, bool hot
     const float ang = kKnobMin + (kKnobMax - kKnobMin) * n;
     const float a0 = bip ? 0.0f : kKnobMin;
     const bool big = w.size >= 0.8f;
+    if (hem_) {
+        // Steven's chrome knob turns as a whole: its pointer shows the value against the tick scale on the plate.
+        // Amber knobs for the orange / gold sections, cyan for the rest.
+        const bool amberKnob = w.accent == Accent::Orange || w.accent == Accent::Gold;
+        const float dk = w.box.w * 1.02f;
+        r.spriteRotated(amberKnob ? Sprite::HemKnobAmber : Sprite::HemKnobCyan, cx, cy, dk, dk, ang);
+        if (w.size >= 2.0f)   // hero dial: live value under the knob
+            r.text(TextStyle::Display, formatValue(d, b.value(w.param)), cx, cy + R0 * 1.17f + 120, kAmber, Align::Center, TextFx::Neon);
+        if (w.size >= 0.6f) {
+            const std::string text = hot ? formatValue(d, b.value(w.param)) : w.label;
+            r.text(TextStyle::Title, text, cx, cy + R0 * 1.17f + 48, hot ? c : kText, Align::Center, hot ? TextFx::NeonCrisp : TextFx::Shadowed);
+        }
+        (void)a0; (void)bip; (void)big;
+        return;
+    }
     // LED dot ring: lit in the accent up to the value, unlit dots stay as dark pin-holes
     if (big) {
         const int ticks = 41;
@@ -332,6 +401,50 @@ void PanelView::drawFader(Renderer& r, PanelBinding& b, const Widget& w, bool ho
         r.sprite(Sprite::KnobLight, {x - rad * 0.93f, y - rad * 0.93f, rad * 1.86f, rad * 1.86f});
         r.fillRound({x - rad * 0.16f, y - rad * 0.16f, rad * 0.32f, rad * 0.32f}, rad * 0.16f, c.withAlpha(0.9f), Blend::Over, true);
     };
+    if (hem_) {
+        // Steven's fader / slider: the track with its own scale, and the metal handle that moves along it
+        const bool amberCap = w.accent == Accent::Orange || w.accent == Accent::Gold;
+        if (w.vertical) {
+            const float y0 = w.box.y + 40, y1 = w.box.b() - 40, sx = w.box.cx();
+            const bool tall = (y1 - y0) > 600.0f;
+            const float tw = std::min(w.box.w * 0.9f, tall ? 150.0f : 130.0f), k = tw / 110.0f;
+            const float endPx = hc::ui::hempart::kFaderTop * 491.0f * k;   // the handle's travel stops this far from the ends
+            const Rect track{sx - tw * 0.5f, y0 - endPx, tw, (y1 - y0) + 2 * endPx};
+            r.nineSlice(amberCap ? Sprite::HemFaderAmber : Sprite::HemFaderCyan, track, k);
+            if (tall && w.size >= 1.0f) {   // real scale read back from the parameter's own range
+                for (int t = 0; t < 7; ++t) {
+                    const float f = static_cast<float>(t) / 6.0f;
+                    r.text(TextStyle::Caption, formatValue(d, fromNorm(d, 1.0f - f)), sx + tw * 0.5f + 14, y0 + (y1 - y0) * f + 10, kTextDim, Align::Left);
+                }
+            }
+            const float cyv = y1 - (y1 - y0) * n;
+            const float capW = 59.0f * k, capH = (amberCap ? 82.0f : 90.0f) * k;
+            r.sprite(Sprite::FaderShadow, {sx - capW * 0.62f + capW * 0.06f, cyv - capH * 0.75f + capH * 0.16f, capW * 1.24f, capH * 1.5f}, {1, 1, 1, 0.9f});
+            r.sprite(amberCap ? Sprite::HemFaderCapAmber : Sprite::HemFaderCapCyan, {sx - capW * 0.5f, cyv - capH * 0.5f, capW, capH},
+                     hot ? Rgba{1.12f, 1.12f, 1.12f, 1} : Rgba{1, 1, 1, 1});
+            const std::string text = hot ? formatValue(d, b.value(w.param)) : w.label;
+            r.text(TextStyle::Title, text, sx, w.box.b() + 56, hot ? c : kText, Align::Center, hot ? TextFx::NeonCrisp : TextFx::Shadowed);
+        } else {
+            const float sy = w.box.cy(), x0 = w.box.x + 70, x1 = w.box.r() - 70;
+            const float th = std::min(w.box.h * 0.95f, 96.0f), k = th / 135.0f;
+            const float endPx = hc::ui::hempart::kSliderLeft * 687.0f * k;
+            const Rect track{x0 - endPx, sy - th * 0.5f, (x1 - x0) + 2 * endPx, th};
+            r.nineSlice(amberCap ? Sprite::HemSliderAmber : Sprite::HemSliderCyan, track, k);
+            const bool bip = d.min < 0.0f && d.max > 0.0f;
+            if (bip) {   // tilt end marks: dark (low shelf) on the left, bright (high shelf) on the right
+                const float lx[4] = {track.x - 58, track.x - 40, track.x - 24, track.x - 8}, ly[4] = {sy - 12, sy - 12, sy + 10, sy + 10};
+                r.polyline(lx, ly, 4, 4, kTextDim, Blend::Over);
+                const float rx[4] = {track.right() + 8, track.right() + 24, track.right() + 40, track.right() + 58}, ry[4] = {sy + 10, sy + 10, sy - 12, sy - 12};
+                r.polyline(rx, ry, 4, 4, kTextDim, Blend::Over);
+            }
+            const float cxh = x0 + (x1 - x0) * n, capW = 95.0f * k, capH = 78.0f * k;
+            r.sprite(amberCap ? Sprite::HemSliderCapAmber : Sprite::HemSliderCapCyan, {cxh - capW * 0.5f, sy - capH * 0.5f, capW, capH},
+                     hot ? Rgba{1.12f, 1.12f, 1.12f, 1} : Rgba{1, 1, 1, 1});
+            r.text(TextStyle::Title, hot ? formatValue(d, b.value(w.param)) : w.label, w.box.cx(), w.box.y - 14,
+                   hot ? c : kText, Align::Center, hot ? TextFx::NeonCrisp : TextFx::Shadowed);
+        }
+        return;
+    }
     if (w.vertical) {
         const float sx = w.box.cx(), slotW = 16;
         const float y0 = w.box.y + 40, y1 = w.box.b() - 40;
@@ -409,6 +522,12 @@ void PanelView::drawButton(Renderer& r, PanelBinding& b, const Widget& w, bool h
     const bool lit = w.param < 0 ? b.actionLit(w.source)
                    : w.choice >= 0 ? static_cast<int>(std::lround(v)) == w.choice : v >= 0.5f;
     if (w.icon == Icon::Power) {   // round key with a lit ring and power glyph
+        if (hem_) {   // Steven's power button: lit = on, dark = off
+            const float sz = std::min(w.box.w, w.box.h) * 0.92f;
+            r.sprite(lit ? Sprite::HemPowerOn : Sprite::HemPowerOff, {w.box.cx() - sz * 0.5f, w.box.cy() - sz * 0.5f, sz, sz},
+                     hot ? Rgba{1.15f, 1.15f, 1.15f, 1} : Rgba{1, 1, 1, 1});
+            return;
+        }
         const float cx = w.box.cx(), cy = w.box.cy(), kr = w.box.w * 0.42f, rr = w.box.w * 0.20f;
         r.sprite(Sprite::KnobShadow, {cx - kr * 1.25f + kr * 0.1f, cy - kr * 1.25f + kr * 0.18f, kr * 2.5f, kr * 2.5f});
         if (lit) r.glow({cx - kr, cy - kr, 2 * kr, 2 * kr}, kr, 18, c.withAlpha(0.40f), true);
@@ -459,6 +578,18 @@ void PanelView::drawButton(Renderer& r, PanelBinding& b, const Widget& w, bool h
     }
     // small rounded switch with a lit lens when on
     const Rect bx = R(w.box);
+    if (hem_ && bx.w >= bx.h * 1.6f) {
+        // Steven's capsule bar: lit = glowing, unlit = the same part turned down; the chrome ends never stretch
+        const bool amberCap = w.accent == Accent::Orange || w.accent == Accent::Gold;
+        const float h = std::min(bx.h, bx.w * 0.45f);
+        const Rect cb{bx.x, bx.cy() - h * 0.5f, bx.w, h};
+        const float corner = h / 74.0f;
+        r.nineSlice(amberCap ? Sprite::HemCapsuleAmber : Sprite::HemCapsuleCyan, cb, corner,
+                    lit ? Rgba{1, 1, 1, 1} : hot ? Rgba{0.42f, 0.42f, 0.44f, 1} : Rgba{0.26f, 0.26f, 0.28f, 1});
+        r.text(TextStyle::Label, w.label, cb.cx(), cb.cy() + 13, lit ? rgb8(0x061018) : hot ? kTextBright : rgb8(0xC8D2DC), Align::Center,
+               lit ? TextFx::Plain : TextFx::Shadowed, cb.w - 2 * hc::ui::hempart::kCapsuleEnd * corner - 8);
+        return;
+    }
     r.fillRound(bx, bx.h * 0.5f, rgb8(0x08090B), Blend::Over);
     r.fillRound(bx.inset(3), bx.h * 0.5f - 3, lit ? c.withAlpha(0.16f) : rgb8(0x1A1C21), Blend::Over, lit);
     r.fillRound({bx.x + 10, bx.y + 5, bx.w - 20, bx.h * 0.38f}, bx.h * 0.2f, {1, 1, 1, lit ? 0.05f : 0.06f}, Blend::Add);
@@ -1155,7 +1286,7 @@ void PanelView::drawSidePanels(Renderer& r, PanelBinding& b, const PanelControll
     const bool hi = c.hover().t == Hit::T::InTrim || c.active().t == Hit::T::InTrim;
     const bool ho = c.hover().t == Hit::T::OutTrim || c.active().t == Hit::T::OutTrim;
     auto panel = [&](const Box& pn, const Box& trim, const Box& meter, const char* label, const ParamDesc& d, int param, bool hot, float dbL, float dbR) {
-        r.text(TextStyle::Title, label, pn.cx(), pn.y + 56, kCyan, Align::Center, TextFx::NeonCrisp);
+        r.text(TextStyle::Title, label, pn.cx(), pn.y + (hem_ ? 66 : 56), kCyan, Align::Center, TextFx::NeonCrisp);
         r.fillRound(R(trim), 12, rgb8(0x07080A), Blend::Over);
         if (hot) r.glow(R(trim).inset(4), 12, 10, kCyan.withAlpha(0.18f), true);
         r.text(TextStyle::Title, formatValue(d, b.value(param)), trim.cx(), trim.cy() + 16, hot ? kCyan : kAmber, Align::Center, TextFx::NeonCrisp, trim.w - 16);

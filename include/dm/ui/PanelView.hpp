@@ -16,7 +16,7 @@
 namespace dm::ui {
 
 [[nodiscard]] hc::ui::Rgba accentColour(Accent a) noexcept;
-// frameArt: assets/faceplates/HEM-Frame-4K.jpg (3840 x 2160). pixelsPerUnit: output pixels per frame pixel.
+// frameArt: assets/faceplates/HEM-Board-4K.jpg (3840 x 2160). pixelsPerUnit: output pixels per frame pixel.
 [[nodiscard]] hc::ui::Image renderPlate(const PanelDef& def, float pixelsPerUnit, const hc::ui::Image& frameArt);
 // Window canvas for the whole frame (frame pixels -> window pixels, letterboxed, centred).
 [[nodiscard]] hc::ui::Canvas frameCanvas(float pixelW, float pixelH) noexcept;
@@ -30,6 +30,8 @@ public:
     // Records one step of every scrolling display (Waveform). draw() calls it once per frame; the
     // snapshot tool calls it while it plays audio so the picture shows a real history.
     void sample(PanelBinding& b);
+    // Steven's parts sheet is in the renderer's atlas: chrome knobs, faders, capsule switches, power key
+    void setHemParts(bool on) noexcept { hem_ = on; }
 
 private:
     void drawTopStrip(hc::ui::Renderer& r, PanelBinding& b, const PanelController& c);   // frame pixels
@@ -58,6 +60,7 @@ private:
     std::vector<std::vector<float>> hist_;         // per widget: kHistory x 3 values, ring
     std::vector<std::size_t> histPos_;
     bool sampledThisFrame_ = false;
+    bool hem_ = false;
 };
 
 } // namespace dm::ui
