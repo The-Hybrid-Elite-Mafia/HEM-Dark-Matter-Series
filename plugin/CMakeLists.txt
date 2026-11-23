@@ -47,8 +47,9 @@ if(WIN32)
                 "${PROJECT_SOURCE_DIR}/assets/fonts/Barlow-Regular.ttf" "${PROJECT_SOURCE_DIR}/assets/fonts/Barlow-Medium.ttf"
                 "${PROJECT_SOURCE_DIR}/assets/fonts/Barlow-SemiBold.ttf" "${PROJECT_SOURCE_DIR}/assets/fonts/OFL.txt"
                 "${DM_PKG}/Contents/Resources/fonts/"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/assets/faceplates/Main-Faceplate.png" "${PROJECT_SOURCE_DIR}/assets/faceplates/HEM-Frame-4K.jpg"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${PROJECT_SOURCE_DIR}/assets/faceplates/Main-Faceplate.png" "${PROJECT_SOURCE_DIR}/assets/faceplates/HEM-Board-4K.jpg"
                 "${DM_PKG}/Contents/Resources/faceplates/"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/assets/parts" "${DM_PKG}/Contents/Resources/parts"
         VERBATIM)
 endif()
 # Test host: loads the built bundle like a music program and checks sound, parameters, state, sidechain.

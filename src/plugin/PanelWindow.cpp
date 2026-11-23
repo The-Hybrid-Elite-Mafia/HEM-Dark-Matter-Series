@@ -22,14 +22,15 @@ struct SharedArt {
     std::filesystem::path dir;
     std::optional<hc::ui::FontSet> fonts;
     std::optional<hc::ui::PartsAtlas> parts;
-    std::optional<hc::ui::Image> frame;   // HEM frame art (3840 x 2160)
+    std::optional<hc::ui::Image> frame;   // Steven's board art (3840 x 2160)
+    bool hem = false;                     // his parts sheet is in the atlas
 };
 SharedArt& shared() {
     static SharedArt s;
     return s;
 }
 bool loadShared(const std::filesystem::path& assets, hc::ui::FontSet& fonts, hc::ui::PartsAtlas& parts, hc::ui::Image& frameArt,
-                std::string* error) {
+                bool& hem, std::string* error) {
     SharedArt& s = shared();
     std::lock_guard lock(s.mutex);
     if (!s.fonts || !s.parts || !s.frame || s.dir != assets) {
@@ -37,9 +38,11 @@ bool loadShared(const std::filesystem::path& assets, hc::ui::FontSet& fonts, hc:
         if (!f) return false;
         auto art = hc::ui::loadFaceplateArt(assets / "faceplates" / "Main-Faceplate.png", error);
         if (!art) return false;
-        auto fr = hc::ui::loadImageFile(assets / "faceplates" / "HEM-Frame-4K.jpg", error);
+        auto fr = hc::ui::loadImageFile(assets / "faceplates" / "HEM-Board-4K.jpg", error);
         if (!fr) return false;
-        s.parts = hc::ui::buildPartsAtlas(art->master);
+        const hc::ui::HemPartImages hp = hc::ui::loadHemParts(assets / "parts");
+        s.hem = hp.complete();
+        s.parts = hc::ui::buildPartsAtlas(art->master, s.hem ? &hp : nullptr);
         s.fonts = std::move(*f);
         s.frame = std::move(*fr);
         s.dir = assets;
@@ -47,6 +50,7 @@ bool loadShared(const std::filesystem::path& assets, hc::ui::FontSet& fonts, hc:
     fonts = *s.fonts;
     parts = *s.parts;
     frameArt = *s.frame;
+    hem = s.hem;
     return true;
 }
 } // namespace
@@ -116,12 +120,14 @@ bool PanelWindow::open(void* parentHwnd, const ui::PanelDef& def, ui::PanelBindi
     hc::ui::FontSet fonts;
     hc::ui::PartsAtlas parts;
     hc::ui::Image frameArt;
-    if (!loadShared(assets, fonts, parts, frameArt, error)) return fail();
+    bool hem = false;
+    if (!loadShared(assets, fonts, parts, frameArt, hem, error)) return fail();
     if (!m.renderer.init(4, error) || !m.renderer.setParts(parts, error)) return fail();
     m.def = &def;
     m.binding = &binding;
     m.controller = std::make_unique<ui::PanelController>(def, binding);
     m.view = std::make_unique<ui::PanelView>(def);
+    m.view->setHemParts(hem);
     m.canvas = ui::frameCanvas(static_cast<float>(w), static_cast<float>(h));   // frame pixels -> window
     // text is drawn both at frame scale (top strip, side panels) and at the plug-in's scale: bake for the larger
     if (!m.font.bake(fonts, m.canvas.scale * std::max(1.0f, def.frame.s))) { if (error) *error = "could not bake the font atlas"; return fail(); }
