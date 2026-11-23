@@ -74,6 +74,7 @@ struct Widget {
     float  size = 1.0f;         // Knob: 1 = standard, >1 bigger rings
     bool   vertical = true;     // Fader / Range orientation
     bool   fromTop = false;     // Meter: gain-reduction style (hangs from the top)
+    bool   inFrame = false;     // set by fitFrame: a key moved into the frame's top strip, drawn at frame size
     float  lo = -60, hi = 0;    // Meter range (dB) / Display range
     Box    screen{};            // Bay: recessed glass screen inside the bay (w = 0: none)
     int    showParam = -1;      // >= 0: only shown (and clickable) while round(value(showParam)) == showValue

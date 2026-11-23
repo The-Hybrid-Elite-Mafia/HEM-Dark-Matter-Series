@@ -109,8 +109,10 @@ void fitFrame(PanelDef& d) {
     d.presetNext = f.toDesign(frame::presetNext);
     d.presetSave = f.toDesign(frame::presetSave);
     d.bypass = f.toDesign(frame::bypass);
-    for (std::size_t k = 0; k < topKeys.size(); ++k)
+    for (std::size_t k = 0; k < topKeys.size(); ++k) {
         d.widgets[topKeys[k]].box = f.toDesign({frame::topKeysX + frame::topKeysStep * static_cast<float>(k), frame::undo.y, frame::topKeyW, frame::undo.h});
+        d.widgets[topKeys[k]].inFrame = true;
+    }
     // side panels: INPUT left, OUTPUT right
     d.inputTrim = f.toDesign(frame::inTrim);
     d.inputMeter = f.toDesign(frame::inMeter);

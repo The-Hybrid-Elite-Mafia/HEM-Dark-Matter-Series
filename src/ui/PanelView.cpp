@@ -200,11 +200,22 @@ void PanelView::draw(Renderer& r, PanelBinding& b, const PanelController& c) {
     const hc::ui::Canvas frameC = r.canvas();   // the caller's canvas maps frame pixels to the window
     drawTopStrip(r, b, c);
     drawSidePanels(r, b, c);
-    r.setCanvas(contentCanvas(frameC, def_));
+    const hc::ui::Canvas contentC = contentCanvas(frameC, def_);
+    r.setCanvas(contentC);
     for (std::size_t i = 0; i < def_.widgets.size(); ++i) {
         const Hit h = c.active().t != Hit::T::None ? c.active() : c.hover();
         const bool hot = h.w == static_cast<int>(i) && h.t != Hit::T::None;
-        if (isShown(def_.widgets[i], b)) drawWidget(r, b, def_.widgets[i], hot);
+        const Widget& w = def_.widgets[i];
+        if (!isShown(w, b)) continue;
+        if (w.inFrame) {   // top-strip key: same size and lettering on every plate
+            Widget atFrame = w;
+            atFrame.box = def_.frame.toFrame(w.box);
+            r.setCanvas(frameC);
+            drawWidget(r, b, atFrame, hot);
+            r.setCanvas(contentC);
+        } else {
+            drawWidget(r, b, w, hot);
+        }
     }
     if (c.menuOpen()) drawPresetMenu(r, b, c);
     r.setCanvas(frameC);
