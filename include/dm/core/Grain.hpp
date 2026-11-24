@@ -36,10 +36,13 @@ public:
     void prepare(int maxWindowSamples, std::uint32_t seed = 0x1234567u) {
         for (auto& s : sh_) s.prepare(maxWindowSamples + 64);
         maxWin_ = static_cast<float>(maxWindowSamples);
-        noise_ = Noise(seed);
+        seed_ = seed;
         reset();
     }
+    // Back to the exact start: same grains, same jitter sequence (so two renders after reset() match).
     void reset() noexcept {
+        noise_ = Noise(seed_);
+        counter_ = 0;
         for (int i = 0; i < N; ++i) {
             sh_[static_cast<std::size_t>(i)].reset();
             jitter_[static_cast<std::size_t>(i)] = 0.0f;
@@ -69,6 +72,7 @@ private:
     std::array<float, N> jitter_{};
     float maxWin_ = 2048;
     unsigned counter_ = 0;
+    std::uint32_t seed_ = 0x1234567u;
     Noise noise_{};
 };
 

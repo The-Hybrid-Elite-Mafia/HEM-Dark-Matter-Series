@@ -44,6 +44,7 @@ public:
     }
 
     void reset() noexcept {
+        lfo_.reset();   // modulation restarts at the same phase: same tail after every reset
         for (auto& l : lines_) l.reset();
         for (auto& d : diff_) { d[0].reset(); d[1].reset(); }
         pre_[0].reset(); pre_[1].reset();

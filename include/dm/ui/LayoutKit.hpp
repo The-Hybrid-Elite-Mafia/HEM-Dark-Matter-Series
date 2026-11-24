@@ -57,7 +57,7 @@ inline void modeBay(PanelDef& d, Box b, std::string title, Accent a, Icon icon, 
     d.widgets.push_back(bay(b, title, a));
     d.widgets.push_back(button(onP, {b.x + 28, b.y + 26, 92, 92}, title + " POWER", a, -1, Icon::Power));
     d.widgets.push_back(button(soloP, {b.r() - 120, b.y + 26, 92, 92}, "S", a));
-    Widget s; s.kind = Kind::Selector; s.param = modeP; s.param2 = onP; s.box = {b.x + 40, b.y + 135, b.w - 80, 290};
+    Widget s; s.kind = Kind::Selector; s.param = modeP; s.param2 = onP; s.box = {b.x + 40, b.y + 135, b.w - 80, 270};   // ends 7 units above the TRIM knob (was 290: overlapped it)
     s.accent = a; s.icon = icon; s.label = title + " MODE";
     d.widgets.push_back(s);
     d.widgets.push_back(knob(trimP, b.r() - 78, b.b() - 62, 46, a, "TRIM", 0.5f));

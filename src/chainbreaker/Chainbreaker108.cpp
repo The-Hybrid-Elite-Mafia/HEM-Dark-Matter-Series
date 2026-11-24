@@ -24,10 +24,11 @@ void StutterUnit::prepare(float sr, std::uint32_t seed) {
     while (n < static_cast<int>(2.0f * sr_)) n <<= 1;
     bufL_.assign(static_cast<std::size_t>(n), 0.0f);
     bufR_.assign(static_cast<std::size_t>(n), 0.0f);
-    rng_ = Noise(seed);
+    seed_ = seed;
     reset();
 }
 void StutterUnit::reset() noexcept {
+    rng_ = Noise(seed_);   // same trigger / scatter sequence after every reset
     std::fill(bufL_.begin(), bufL_.end(), 0.0f);
     std::fill(bufR_.begin(), bufR_.end(), 0.0f);
     t_ = 0; beatStart_ = 0; sliceLen_ = 1; beatPos_ = 0; on_ = false; rateHz_ = 0;
@@ -129,6 +130,9 @@ void Chainbreaker108::resetCore() noexcept {
     for (auto& b : gr_) b.reset();
     tiltLo_.reset(); tiltHi_.reset();
     for (auto& f : xf_) f.reset();
+    clipHold_ = {0, 0, 0};
+    for (auto& p : clipPub_) p.store(0.0f, std::memory_order_relaxed);
+    stutHz_.store(0.0f, std::memory_order_relaxed);
 }
 void Chainbreaker108::updateCore(const float* v, const float* old, bool) noexcept {
     (void)old;
@@ -206,16 +210,23 @@ void Chainbreaker108::processCore(float& l, float& r) noexcept {
     l = lerp(dl, l, mix_);
     r = lerp(dr, r, mix_);
 }
-void Chainbreaker108::afterChunk(int) noexcept {
+void Chainbreaker108::afterChunk(int n) noexcept {
     float hz = 0;
     std::array<float, 3> cp{0, 0, 0};
     for (std::size_t i = 0; i < 4; ++i) {
         if (on_[i] && type_[i] == 0) hz = std::max(hz, stut_[i].rateHz());
+        clip_[i].endChunk();   // close this chunk's count first, so the meters show this chunk (not the one before)
         if (on_[i] && type_[i] == 1) { for (int b = 0; b < 3; ++b) cp[static_cast<std::size_t>(b)] = std::max(cp[static_cast<std::size_t>(b)], clip_[i].clipPercent(b)); }
-        clip_[i].endChunk();
     }
     stutHz_.store(hz, std::memory_order_relaxed);
-    for (std::size_t b = 0; b < 3; ++b) clipPub_[b].store(cp[b], std::memory_order_relaxed);
+    // Hold each band's clip amount and let it fall back over kClipMeterReleaseMs, so a clip the screen
+    // would miss between two frames still shows.
+    const float fall = std::exp(-static_cast<float>(std::max(n, 0)) / (sr_ * a::kClipMeterReleaseMs * 0.001f));
+    for (std::size_t b = 0; b < 3; ++b) {
+        clipHold_[b] = std::max(cp[b], clipHold_[b] * fall);
+        if (clipHold_[b] < 1e-4f) clipHold_[b] = 0.0f;
+        clipPub_[b].store(clipHold_[b], std::memory_order_relaxed);
+    }
 }
 float Chainbreaker108::spectroCurveDb(float hz) const noexcept {
     float db = 0;

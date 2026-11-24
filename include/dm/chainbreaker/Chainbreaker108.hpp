@@ -97,6 +97,7 @@ private:
     std::int64_t t_ = 0, beatStart_ = 0, sliceLen_ = 1;
     double beatPos_ = 0;
     bool on_ = false;
+    std::uint32_t seed_ = 1u;
     Noise rng_{};
 };
 
@@ -175,6 +176,7 @@ private:
     int route_ = 1;
     std::atomic<float> stutHz_{0};
     std::array<std::atomic<float>, 3> clipPub_{};
+    std::array<float, 3> clipHold_{};   // L / M / H meter after hold and release
 };
 
 } // namespace dm::cb

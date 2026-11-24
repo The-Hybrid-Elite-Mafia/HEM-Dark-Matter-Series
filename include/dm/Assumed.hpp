@@ -368,5 +368,6 @@ inline constexpr float kBroadcastHz[3] = {100.0f, 1000.0f, 8000.0f};         // 
 inline constexpr float kGraphicHz[5]   = {40.0f, 150.0f, 800.0f, 3000.0f, 10000.0f}; // ASSUMED
 inline constexpr float kToneTiltDb     = 6.0f;    // ASSUMED: master TONE full travel
 inline constexpr float kCrossfeedHz    = 700.0f;  // ASSUMED
+inline constexpr float kClipMeterReleaseMs = 300.0f; // ASSUMED: MULTI-CLIP L / M / H meters hold a clip and fall back over this time
 } // namespace cb
 } // namespace dm::assumed
