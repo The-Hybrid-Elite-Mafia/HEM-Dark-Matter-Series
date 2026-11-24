@@ -26,6 +26,7 @@ void SatModule::reset() noexcept {
     for (StereoBiquad* b : {&pre_, &de_, &bump_, &tiltLo_, &tiltHi_}) b->reset();
     for (auto& f : hf_) f.reset();
     for (auto& d : wow_) d.reset();
+    wowLfo_.reset(); flutLfo_.reset();   // wow / flutter restart at the same phase
     satAcc_ = sigAcc_ = 0;
 }
 void SatModule::update(const float* v, const float* old) noexcept {
@@ -259,6 +260,7 @@ void ModModule::reset() noexcept {
     for (auto& c : ph_) for (auto& ap : c) ap.reset();
     fb_ = {0, 0};
     for (std::size_t i = 0; i < lfo_.size(); ++i) lfo_[i].reset(0.25f * static_cast<float>(i));
+    driftLfo_.reset(); wowLfo_.reset(); flutLfo_.reset();   // drift / wow / flutter restart at the same phase
     sideHp_.reset();
     xl_ = xr_ = xlr_ = 0;
 }

@@ -2,6 +2,7 @@
 // HEM-board faceplate (PluginInfo::panel()). Report only — writes qa_report_darkmatter.csv and never fails
 // the test run. Run it with: dm_tests qa
 #include "QaCommon.hpp"
+#include "dm/ironlock/IronLock.hpp"
 #include "dm/plugin/Registry.hpp"
 #include "dm/ui/PanelModel.hpp"
 
@@ -46,6 +47,34 @@ bool keepAtDefault(const dm::ParamDesc& d, std::size_t index, int bypassParam) {
 
 std::string id(const EngineApi& e, std::size_t i) { return std::string(e.desc(i).id); }
 
+// Two IRON LOCK instances in one process, as two tracks in a DAW. A has GROUPS on and a scale of C only;
+// B plays a voice with its own default scale. B's GROUPS on must make it follow A's scale (different audio).
+bool ironLockGroupsLive(const PluginInfo& info, const Stereo& voice) {
+    auto renderB = [&](bool groups) {
+        auto a = info.create();
+        auto b = info.create();
+        for (auto* x : {a.get(), b.get()}) {
+            x->prepare(static_cast<float>(hemqa::kRate), hemqa::kBlock);
+            for (std::size_t k = 0; k < x->paramCount(); ++k) x->set(k, x->desc(k).def);
+            x->set(static_cast<std::size_t>(dm::il::Strength), 100.0f);
+            x->set(static_cast<std::size_t>(dm::il::Range), 600.0f);
+            x->reset();
+        }
+        a->set(static_cast<std::size_t>(dm::il::Groups), 1.0f);
+        b->set(static_cast<std::size_t>(dm::il::Groups), groups ? 1.0f : 0.0f);
+        Stereo sa(hemqa::kBlock);
+        (void)run(*a, sa, false);   // A applies GROUPS
+        for (std::size_t n = 0; n < 12; ++n)
+            a->set(static_cast<std::size_t>(dm::il::NoteC) + n, n == 0 ? 1.0f : 0.0f);   // A changes its scale: C only
+        (void)run(*a, sa, false);   // ...and shares it
+        Stereo o = run(*b, voice, false);
+        hemqa::Hash h;
+        h.add(o);
+        return h.h;
+    };
+    return renderB(true) != renderB(false);
+}
+
 void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
     const std::string name = info.name;
     auto e = info.create();
@@ -54,7 +83,7 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
     const std::set<int> hidden(hiddenList.begin(), hiddenList.end());
     auto sweepable = [&](std::size_t i) { return hostVisible(info, i) && !hidden.count(static_cast<int>(i)); };
     const bool key = info.sidechain;
-    const Stereo full = hemqa::testAudio(1.0), silence(static_cast<std::size_t>(0.5 * hemqa::kRate));
+    const Stereo full = hemqa::testAudio(1.0), voice = hemqa::voiceAudio(1.0), silence(static_cast<std::size_t>(0.5 * hemqa::kRate));
 
     const int bypassParam = info.panel().bypassParam;
     auto defaults = [&] { for (std::size_t k = 0; k < count; ++k) e->set(k, e->desc(k).def); };
@@ -64,9 +93,14 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
     e->reset();
     if (!hemqa::finite(run(*e, full, key))) rep.add(name, "DSP", "NAN_OR_INF", "defaults", "non-finite output on 1 s of test audio at default settings");
 
-    auto setContext = [&](std::size_t skip, int mode) {   // 0 defaults, 1 min, 2 max, 3 middle
+    // Settings of the other controls: 0 defaults, 1 all at min, 2 all at max, 3 all at middle,
+    // 4 defaults played with a single voice (pitch tools), 5 defaults with ONE other control (pairK) at pairV.
+    std::size_t pairK = 0;
+    float pairV = 0;
+    auto setContext = [&](std::size_t skip, int mode) {
         defaults();
-        if (mode == 0) return;
+        if (mode == 0 || mode == 4) return;
+        if (mode == 5) { if (pairK != skip) e->set(pairK, pairV); return; }
         for (std::size_t k = 0; k < count; ++k) {
             const auto& d = e->desc(k);
             if (k == skip || !sweepable(k) || keepAtDefault(d, k, bypassParam)) continue;
@@ -85,7 +119,7 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
             getOk = hemqa::closeTo(e->get(param), stepped(d) ? std::round(want) : want);
         }
         e->reset();
-        const Stereo o = run(*e, full, key);
+        const Stereo o = run(*e, mode == 4 ? voice : full, key);
         blewUp = !hemqa::finite(o);
         hemqa::Hash h;
         h.add(o);
@@ -137,8 +171,28 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
         }
         if (blew) rep.add(name, "DSP", "NAN_OR_INF_SWEEP", id(*e, i), "non-finite output at " + blewAt);
         if (mism) rep.add(name, "DSP", "GET_SET_MISMATCH", id(*e, i), "get() != set() at " + mismAt);
+        auto liveIn = [&](int mode) {
+            std::set<std::uint64_t> hashes;
+            for (float v : values) { bool b = false, g = true; hashes.insert(stateHash(mode, i, v, b, g)); }
+            return hashes.size() > 1;
+        };
+        // Still silent: a control can depend on what is played (a pitch tool needs a voice) or on ONE other
+        // switch (a stutter's rate only matters once FLUX triggers it). Try both before calling it dead.
+        if (!live) live = liveIn(4);
+        for (std::size_t k = 0; k < count && !live; ++k) {
+            if (k == i || !sweepable(k) || keepAtDefault(e->desc(k), k, bypassParam)) continue;
+            const auto& dk = e->desc(k);
+            for (float o : hemqa::sweepValues(dk.min, dk.def, stepMax(dk), stepped(dk))) {
+                if (o == dk.def) continue;
+                pairK = k; pairV = o;
+                if ((live = liveIn(5))) break;
+            }
+        }
+        // IRON LOCK GROUPS shares the scale between instances: it can only be heard with a second instance.
+        if (!live && std::string(info.name) == "HEM IRON LOCK" && id(*e, i) == "groups") live = ironLockGroupsLive(info, voice);
         if (!live) rep.add(name, "DSP", "DEAD_WIRE", id(*e, i), "audio bit-identical at all " + std::to_string(values.size()) +
-                           " values, with the other controls at default / min / max / middle");
+                           " values, with the other controls at default / min / max / middle, with a single voice, and with each"
+                           " other control moved on its own");
     }
 
     // meters: the bottom-bar IN / OUT meters and every meter widget on the plate
@@ -151,7 +205,7 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
             srcs.push_back({w.label.empty() ? "meter " + std::to_string(w.source) : w.label, w.source});
     std::vector<int> moved(srcs.size(), 0), bad(srcs.size(), 0);
     std::vector<float> lastHot(srcs.size(), 0.0f);
-    for (int mode = 0; mode <= 3; ++mode) {
+    auto meterPass = [&](int mode) {
         e = info.create();
         e->prepare(static_cast<float>(hemqa::kRate), hemqa::kBlock);
         auto binding = e->binding();
@@ -160,18 +214,32 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
         (void)run(*e, silence, key);
         std::vector<float> quiet;
         for (const auto& s : srcs) quiet.push_back(binding->meter(s.source));
-        (void)run(*e, full, key);
+        (void)run(*e, mode == 4 ? voice : full, key);
         for (std::size_t m = 0; m < srcs.size(); ++m) {
             const float hot = binding->meter(srcs[m].source);
             if (!std::isfinite(hot) || !std::isfinite(quiet[m])) bad[m] = 1;
             else if (quiet[m] != hot) moved[m] = 1;
             lastHot[m] = hot;
         }
+    };
+    auto allMoved = [&] { return std::all_of(moved.begin(), moved.end(), [](int x) { return x != 0; }); };
+    for (int mode = 0; mode <= 4; ++mode) meterPass(mode);
+    // Same as the sweep: a meter can need one other control moved (a clipper's meter needs DRIVE to clip).
+    for (std::size_t k = 0; k < count && !allMoved(); ++k) {
+        if (!sweepable(k) || keepAtDefault(e->desc(k), k, bypassParam)) continue;
+        const auto& dk = e->desc(k);
+        for (float o : hemqa::sweepValues(dk.min, dk.def, stepMax(dk), stepped(dk))) {
+            if (o == dk.def) continue;
+            pairK = k; pairV = o;
+            meterPass(5);
+            if (allMoved()) break;
+        }
     }
     for (std::size_t m = 0; m < srcs.size(); ++m) {
         if (bad[m]) rep.add(name, "METER", "METER_NAN_OR_INF", srcs[m].name, "non-finite meter value (source " + std::to_string(srcs[m].source) + ")");
         if (!moved[m]) rep.add(name, "METER", "METER_STUCK", srcs[m].name, "reads " + hemqa::fmt("%g", lastHot[m]) +
-                               " for both silence and hot signal, with the controls at default / min / max / middle (source " +
+                               " for both silence and hot signal, with the controls at default / min / max / middle, with a single voice"
+                               " and with each other control moved on its own (source " +
                                std::to_string(srcs[m].source) + ")");
     }
 }

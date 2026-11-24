@@ -38,12 +38,15 @@ void SfxUnit::prepare(float sampleRate) {
     lfoWow_.setRate(kTapeWowHz, sr_);
     lfoFlut_.setRate(kTapeFlutterHz, sr_);
     constexpr float uniRates[4] = {0.61f, 0.87f, 1.29f, 1.73f};
-    for (std::size_t i = 0; i < 4; ++i) { lfoUni_[i].setRate(uniRates[i], sr_); lfoUni_[i].reset(0.23f * static_cast<float>(i)); }
+    for (std::size_t i = 0; i < 4; ++i) lfoUni_[i].setRate(uniRates[i], sr_);
     reset();
     updateFilters();
 }
 
 void SfxUnit::reset() noexcept {
+    // every LFO back to its start phase (unison voices keep their 0.23 offsets), so renders repeat
+    for (Lfo* l : {&lfoA_, &lfoB_, &lfoC_, &lfoWow_, &lfoFlut_}) l->reset();
+    for (std::size_t i = 0; i < 4; ++i) lfoUni_[i].reset(0.23f * static_cast<float>(i));
     for (auto& d : mod_) d.reset();
     for (auto& u : uni_) u[0].reset();
     for (auto& s : shift_) s.reset();
