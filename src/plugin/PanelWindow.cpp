@@ -10,6 +10,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <mutex>
 #include <optional>
@@ -65,10 +66,39 @@ struct PanelWindow::Impl {
     std::unique_ptr<ui::PanelController> controller;
     std::unique_ptr<ui::PanelView> view;
     bool open = false;
+    hc::ui::FontSet fonts;
+    hc::ui::Image   frameArt;
+    float fontScale = 0.0f, plateScale = 0.0f;
+    bool  plateStale = false;
+    std::chrono::steady_clock::time_point resizedAt{};
+
+    // text is drawn both at frame scale (top strip, side panels) and at the plug-in's scale: bake for the larger
+    bool bakeFont(std::string* error) {
+        if (!font.bake(fonts, canvas.scale * std::max(1.0f, def->frame.s))) { if (error) *error = "could not bake the font atlas"; return false; }
+        fontScale = canvas.scale;
+        return renderer.setFont(font, error);
+    }
+    bool buildPlate(std::string* error) {
+        const float ppu = std::min(canvas.scale, 4096.0f / ui::frame::kW);
+        if (!renderer.setPanel(hc::ui::buildMips(hc::ui::premultiply(ui::renderPlate(*def, ppu, frameArt))), error)) return false;
+        plateScale = canvas.scale;
+        plateStale = false;
+        return true;
+    }
+    void restatic() {
+        renderer.beginStatic(canvas);
+        renderer.panel({0, 0, ui::frame::kW, ui::frame::kH});
+        renderer.endStatic();
+    }
 
     void frame() {
         if (!open) return;
         window.makeCurrent();
+        if (plateStale && std::chrono::steady_clock::now() - resizedAt > std::chrono::milliseconds(300)) {
+            std::string err;   // resizing has settled: redraw the faceplate sharp at the new size
+            if (buildPlate(&err)) restatic();
+            plateStale = false;
+        }
         for (const hc::ui::InputEvent& e : window.takeEvents()) {
             const hc::ui::Canvas content = ui::contentCanvas(canvas, *def);   // the controller works in the plug-in's own units
             const float x = content.toDesignX(e.x), y = content.toDesignY(e.y);
@@ -117,11 +147,9 @@ bool PanelWindow::open(void* parentHwnd, const ui::PanelDef& def, ui::PanelBindi
     sizeFor(def, scale, w, h);
     if (!m.window.createChild(parentHwnd, w, h, error)) return false;
     auto fail = [&] { m.window.restoreContext(); close(); return false; };
-    hc::ui::FontSet fonts;
     hc::ui::PartsAtlas parts;
-    hc::ui::Image frameArt;
     bool hem = false;
-    if (!loadShared(assets, fonts, parts, frameArt, hem, error)) return fail();
+    if (!loadShared(assets, m.fonts, parts, m.frameArt, hem, error)) return fail();
     if (!m.renderer.init(4, error) || !m.renderer.setParts(parts, error)) return fail();
     m.def = &def;
     m.binding = &binding;
@@ -129,15 +157,10 @@ bool PanelWindow::open(void* parentHwnd, const ui::PanelDef& def, ui::PanelBindi
     m.view = std::make_unique<ui::PanelView>(def);
     m.view->setHemParts(hem);
     m.canvas = ui::frameCanvas(static_cast<float>(w), static_cast<float>(h));   // frame pixels -> window
-    // text is drawn both at frame scale (top strip, side panels) and at the plug-in's scale: bake for the larger
-    if (!m.font.bake(fonts, m.canvas.scale * std::max(1.0f, def.frame.s))) { if (error) *error = "could not bake the font atlas"; return fail(); }
-    if (!m.renderer.setFont(m.font, error)) return fail();
-    const float ppu = std::min(m.canvas.scale, 4096.0f / ui::frame::kW);
-    if (!m.renderer.setPanel(hc::ui::buildMips(hc::ui::premultiply(ui::renderPlate(def, ppu, frameArt))), error)) return fail();
+    if (!m.bakeFont(error)) return fail();
+    if (!m.buildPlate(error)) return fail();
     if (!m.renderer.setTargetSize(w, h, error)) return fail();
-    m.renderer.beginStatic(m.canvas);
-    m.renderer.panel({0, 0, ui::frame::kW, ui::frame::kH});
-    m.renderer.endStatic();
+    m.restatic();
     m.window.restoreContext();
     m.open = true;
     m.window.setTimer(33, [this] { impl_->frame(); });
@@ -158,5 +181,22 @@ void PanelWindow::close() noexcept {
 }
 
 bool PanelWindow::isOpen() const noexcept { return impl_->open; }
+
+void PanelWindow::resize(int w, int h) {
+    Impl& m = *impl_;
+    w = std::max(64, w);
+    h = std::max(36, h);
+    if (!m.open || (w == static_cast<int>(m.canvas.pixelW) && h == static_cast<int>(m.canvas.pixelH))) return;
+    m.window.makeCurrent();
+    m.window.resizeChild(w, h);
+    m.canvas = ui::frameCanvas(static_cast<float>(w), static_cast<float>(h));
+    std::string err;
+    if (m.canvas.scale > m.fontScale * 1.06f || m.canvas.scale < m.fontScale * 0.8f) (void)m.bakeFont(&err);
+    (void)m.renderer.setTargetSize(w, h, &err);
+    m.restatic();
+    m.plateStale = std::fabs(m.canvas.scale / std::max(1e-6f, m.plateScale) - 1.0f) > 0.15f;
+    m.resizedAt = std::chrono::steady_clock::now();
+    m.window.restoreContext();
+}
 
 } // namespace dm::plugin

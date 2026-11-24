@@ -29,6 +29,7 @@
 #if defined(_WIN32)
 #include "dm/plugin/PanelWindow.hpp"
 #include "public.sdk/source/common/pluginview.h"
+#include "ScalableView.hpp"
 #include <windows.h>
 #endif
 
@@ -316,30 +317,37 @@ std::filesystem::path bundleResources() {
     return std::filesystem::path(std::wstring(buf, n)).parent_path().parent_path() / "Resources";
 }
 
-class View final : public CPluginView {
+// The editor: an OpenGL child window inside the host's window. It follows the host's display scaling and
+// can be resized; the faceplate keeps its shape (see ScalableView.hpp).
+class View final : public vst3view::ScalableView {
 public:
-    View(const ui::PanelDef& def, ui::PanelBinding& binding) : def_(def), binding_(binding) {
-        scale_ = plugin::PanelWindow::defaultScale(def_);
-        int w = 0, h = 0;
-        plugin::PanelWindow::sizeFor(def_, scale_, w, h);
-        ViewRect r(0, 0, w, h);
-        setRect(r);
-    }
+    View(const ui::PanelDef& def, ui::PanelBinding& binding)
+        : ScalableView(base(def, true), base(def, false), plugin::PanelWindow::defaultScale(def)), def_(def), binding_(binding) {}
     tresult PLUGIN_API isPlatformTypeSupported(FIDString type) SMTG_OVERRIDE {
         return std::strcmp(type, kPlatformTypeHWND) == 0 ? kResultTrue : kResultFalse;
     }
     void attachedToParent() SMTG_OVERRIDE {
         std::string err;
-        if (!window_.open(systemWindow, def_, binding_, bundleResources(), scale_, &err))
+        if (!window_.open(systemWindow, def_, binding_, bundleResources(), scale(), &err))
             ::OutputDebugStringA(("HEM Dark Matter: faceplate failed: " + err + "\n").c_str());
+        else
+            window_.resize(rect.getWidth(), rect.getHeight());   // exactly the size the host was given
     }
     void removedFromParent() SMTG_OVERRIDE { window_.close(); }
 
+protected:
+    void resized(int width, int height) override { window_.resize(width, height); }
+
 private:
+    static float base(const ui::PanelDef& def, bool width) {
+        int w = 0, h = 0;
+        plugin::PanelWindow::sizeFor(def, 1.0f, w, h);
+        return static_cast<float>(width ? w : h);
+    }
+
     const ui::PanelDef& def_;
     ui::PanelBinding& binding_;
     plugin::PanelWindow window_;
-    float scale_ = 0.36f;
 };
 #endif
 
