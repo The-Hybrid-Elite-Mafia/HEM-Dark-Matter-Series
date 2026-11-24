@@ -103,7 +103,7 @@ add_custom_command(TARGET dm_faceplate_snapshot POST_BUILD
 
 # ---- Tests ---------------------------------------------------------------------------------------------
 enable_testing()
-add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp tests/faceplate_tests.cpp tests/plugin_tests.cpp)
+add_executable(dm_tests tests/main.cpp tests/AllocTracker.cpp tests/phantom_vox_tests.cpp tests/syndicate_tests.cpp tests/apex_tests.cpp tests/ironlock_tests.cpp tests/rider_darkmatter_tests.cpp tests/chainbreaker_tests.cpp tests/faceplate_tests.cpp tests/plugin_tests.cpp tests/qa_report.cpp)
 target_link_libraries(dm_tests PRIVATE dm_phantom_vox dm_syndicate dm_apex dm_ironlock dm_rider dm_darkmatter dm_chainbreaker dm_ui_core dm_plugin_core)
 add_test(NAME dm_tests COMMAND dm_tests)
 
