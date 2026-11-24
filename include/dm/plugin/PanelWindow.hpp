@@ -30,6 +30,9 @@ public:
               float scale, std::string* error);
     void close() noexcept;
     [[nodiscard]] bool isOpen() const noexcept;
+    // The host gave the editor a new pixel size (window dragged, or another display scale). Same layout, same
+    // controls; text is re-baked for the new size at once, the faceplate is redrawn sharp once resizing settles.
+    void resize(int width, int height);
 
 private:
     struct Impl;
