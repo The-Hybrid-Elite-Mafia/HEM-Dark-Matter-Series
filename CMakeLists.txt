@@ -4,7 +4,8 @@
 #  GCC/Clang are accepted only for developer test runs; releases come from MSVC CI.
 # =============================================================================
 cmake_minimum_required(VERSION 3.25)
-project(HEMDarkMatterSeries VERSION 0.3.0 LANGUAGES CXX)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" DM_PROJECT_VERSION LIMIT_COUNT 1)   # one version for the plug-ins and the installer
+project(HEMDarkMatterSeries VERSION ${DM_PROJECT_VERSION} LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

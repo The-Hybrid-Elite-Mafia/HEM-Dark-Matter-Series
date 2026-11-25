@@ -219,8 +219,11 @@ void runSyndicateTests() {
         std::vector<WiredOverride> ov = {{HemTone::kFirst + ToneModule::Slope, {{HemTone::kFirst + ToneModule::Hpf, 200}}}};
         for (std::size_t b = 0; b < 6; ++b)
             ov.push_back({HemTone::kFirst + ToneModule::SubF + b, {{HemTone::kFirst + ToneModule::Sub + b, 8}}});
-        runSuite(splitCfg<HemTone>("HEM TONE (split)", ov,
-        {{HemTone::kFirst + ToneModule::Mode, {{HemTone::kFirst + ToneModule::Low, 6}, {HemTone::kFirst + ToneModule::Air, 6}}, "TONE"}}));
+        auto tc = splitCfg<HemTone>("HEM TONE (split)", ov,
+        {{HemTone::kFirst + ToneModule::Mode, {{HemTone::kFirst + ToneModule::Low, 6}, {HemTone::kFirst + ToneModule::Air, 6}}, "TONE"}});
+        // a flat TONE is untouched now: the quality checks start from a small boost so the voicings have work to do
+        tc.colour = [](HemTone& e) { e.params().set(HemTone::kFirst + ToneModule::Low, 3); e.params().set(HemTone::kFirst + ToneModule::Air, 3); };
+        runSuite(tc);
     }
     runSuite(splitCfg<HemMod>("HEM MOD (split)",
         {{HemMod::kFirst + ModModule::Depth, {{HemMod::kFirst + ModModule::Amount, 80}}},

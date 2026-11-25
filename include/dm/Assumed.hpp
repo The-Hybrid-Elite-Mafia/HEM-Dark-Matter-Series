@@ -23,21 +23,21 @@ inline constexpr int   kChunk              = 32;      // ASSUMED parameter updat
 namespace pv { // =================================== HEM PHANTOM VOX ===================================
 
 // ---- Defaults ---------------------------------------------------------------------------------------
-inline constexpr float kDefComp       = 35.0f;  // ASSUMED
-inline constexpr float kDefColor      = 127.0f; // BRIEF (COLOR 127%)
-inline constexpr float kDefDeEss      = 30.0f;  // ASSUMED
+inline constexpr float kDefComp       = 0.0f;  // STEVEN: zero colour on load (was 35.0, ASSUMED)
+inline constexpr float kDefColor      = 0.0f; // STEVEN: zero colour on load (was 127.0, BRIEF (COLOR 127%))
+inline constexpr float kDefDeEss      = 0.0f;  // STEVEN: zero colour on load (was 30.0, ASSUMED)
 inline constexpr float kDefFocusHz    = 5200.0f;// BRIEF (FOCUS 5.2 kHz)
 inline constexpr float kDefGateDb     = -96.0f; // BRIEF range floor = gate effectively open
-inline constexpr float kDefHpfHz      = 70.0f;  // ASSUMED (vocal rumble cut)
+inline constexpr float kDefHpfHz      = 20.0f;  // STEVEN: zero colour on load (was 70.0, ASSUMED (vocal rumble cut))
 inline constexpr float kDefLpfHz      = 20000.0f; // ASSUMED (open)
-inline constexpr float kDefReverbMix  = 25.0f;  // ASSUMED (protocol: 20-35%)
+inline constexpr float kDefReverbMix  = 0.0f;  // STEVEN: zero colour on load (was 25.0, ASSUMED (protocol: 20-35%))
 inline constexpr float kDefReverbTime = 2.3f;   // BRIEF (TIME 2.3s)
-inline constexpr float kDefDelayMix   = 20.0f;  // ASSUMED (protocol: 20-35%)
+inline constexpr float kDefDelayMix   = 0.0f;  // STEVEN: zero colour on load (was 20.0, ASSUMED (protocol: 20-35%))
 inline constexpr int   kDefDelaySync  = 8;      // BRIEF (RATE 1/8d) - index into kSyncNames
 inline constexpr float kDefVrbDuck    = 32.0f;  // BRIEF (VRB DUCK 32%)
 inline constexpr float kDefDlyDuck    = 17.0f;  // BRIEF (DLY DUCK 17%)
-inline constexpr float kDefSfx        = 25.0f;  // ASSUMED
-inline constexpr float kDefEnhancer   = 15.0f;  // ASSUMED
+inline constexpr float kDefSfx        = 0.0f;  // STEVEN: zero colour on load (was 25.0, ASSUMED)
+inline constexpr float kDefEnhancer   = 0.0f;  // STEVEN: zero colour on load (was 15.0, ASSUMED)
 
 // ---- Dynamics ---------------------------------------------------------------------------------------
 inline constexpr float kCompThreshRangeDb = 36.0f;  // ASSUMED: COMP 100% -> threshold -36 dBFS
@@ -175,7 +175,7 @@ inline constexpr SatModeTune kSatModeTable[kSatModes] = { // ASSUMED (all voicin
     {"S STRIP",  SatType::Odd,  3.0f,  1.5f, 20000.0f, 0.00f, 0.00f, 0.0f, 100.0f},
     {"M TUBE",   SatType::Tube, 6.0f,  0.0f, 17000.0f, 0.00f, 0.00f, 1.0f,  80.0f},
 };
-inline constexpr float kSatDefault       = 30.0f;  // ASSUMED
+inline constexpr float kSatDefault       = 0.0f;   // STEVEN: zero colour on load (was 30, ASSUMED)
 inline constexpr float kCharacterTiltDb  = 3.0f;   // ASSUMED: CRISP/WARM full travel
 inline constexpr float kCharacterPivotHz = 1000.0f;// ASSUMED
 
@@ -195,8 +195,8 @@ inline constexpr CompModeTune kCompModeTable[kCompModes] = { // ASSUMED (all voi
     {"S COMP",  1, 4.0f,  3.0f, 10.0f, 100.0f, SatType::Odd,  1.3f},
     {"VACUUM",  2, 2.5f, 12.0f, 15.0f, 700.0f, SatType::Tube, 2.4f},
 };
-inline constexpr float kCompDefault      = 30.0f;  // ASSUMED
-inline constexpr float kCompColorDefault = 40.0f;  // ASSUMED
+inline constexpr float kCompDefault      = 0.0f;   // STEVEN: zero colour on load (was 30, ASSUMED)
+inline constexpr float kCompColorDefault = 0.0f;   // STEVEN: zero colour on load (was 40, ASSUMED)
 inline constexpr float kSidechainDefault = 35.0f;  // BRIEF (35% AMOUNT)
 inline constexpr float kSidechainMaxHz   = 300.0f; // ASSUMED: SIDECHAIN 100% -> 300 Hz detector high-pass
 inline constexpr float kCompThreshRangeDb= 30.0f;  // ASSUMED
@@ -233,8 +233,8 @@ inline constexpr ModModeTune kModModeTable[kModModes] = { // ASSUMED (all voicin
     {"M PHASER",   3, 0.30f,  0.0f, 0.0f, 4, 0.5f},
     {"RETRO",      4, 0.20f,  3.0f, 2.0f, 1, 0.6f},
 };
-inline constexpr float kModDefault     = 20.0f; // ASSUMED
-inline constexpr float kModDepthDefault= 50.0f; // ASSUMED
+inline constexpr float kModDefault     = 0.0f;  // STEVEN: zero colour on load (was 20, ASSUMED)
+inline constexpr float kModDepthDefault= 0.0f;  // STEVEN: zero colour on load (was 50, ASSUMED)
 inline constexpr float kDriftMaxCents  = 12.0f; // ASSUMED at DRIFT 100%
 inline constexpr float kDriftRateHz    = 0.13f; // ASSUMED
 inline constexpr float kAnalogWowMs    = 0.6f;  // ASSUMED at ANALOG 100%
@@ -257,7 +257,7 @@ inline constexpr MaxModeTune kMaxModeTable[kMaxModes] = { // ASSUMED (all voicin
     {"NY MIXBUS",    8.0f, 1.0f,  0.0f,  1.0f,  80.0f, 0.0f, 0.0f, 0.0f, 0.5f, SatType::Odd,  1.5f},
     {"LA MIXBUS",    3.0f, 1.5f,  6.0f, 20.0f, 500.0f, 0.5f, 0.0f, 0.5f, 1.0f, SatType::Tube, 1.3f},
 };
-inline constexpr float kMultiDefault   = 20.0f;  // ASSUMED
+inline constexpr float kMultiDefault   = 0.0f;   // STEVEN: zero colour on load (was 20, ASSUMED)
 inline constexpr float kMaxDefault     = 0.0f;   // ASSUMED (no loudness push on load)
 inline constexpr float kMaxPushDb      = 12.0f;  // ASSUMED: MAX 100% -> +12 dB into the clipper
 inline constexpr float kXoverLowDef    = 250.0f; // BRIEF
@@ -286,9 +286,9 @@ inline constexpr ApexEngineTune kEngineTable[kEngines] = { // ASSUMED (all voici
     {"TITAN",    120, 2500,  1.0f,  60.0f, 20.0f,  8.0f,  8.0f, SatType::Odd,  2.0f, false, 0.0f},
     {"VELVET",   300, 5000, 30.0f, 400.0f,  4.0f,  5.0f,  6.0f, SatType::Tube, 1.4f, false, 0.5f},
 };
-inline constexpr float kDefAmount    = 127.0f; // BRIEF
+inline constexpr float kDefAmount    = 0.0f; // STEVEN: zero colour on load (was 127.0, BRIEF)
 inline constexpr float kDefContain   = 30.0f;  // ASSUMED (brief shows the arc, not a value)
-inline constexpr float kDefBoost     = 20.0f;  // ASSUMED
+inline constexpr float kDefBoost     = 0.0f;  // STEVEN: zero colour on load (was 20.0, ASSUMED)
 inline constexpr float kDefPeaks     = 50.0f;  // BRIEF
 inline constexpr float kDefCurve     = 27.0f;  // BRIEF
 inline constexpr float kDefColorLow  = 23.0f;  // BRIEF
@@ -323,8 +323,8 @@ inline constexpr float kMinorProfile[12] = {6.33f, 2.68f, 3.52f, 5.38f, 2.60f, 3
 
 namespace rd { // ================================= HEM OUTLAW RIDER ========================================
 inline constexpr float kDefTarget       = -18.0f; // ASSUMED (dBFS RMS)
-inline constexpr float kDefMaxBoost     = 6.0f;   // ASSUMED
-inline constexpr float kDefMinCut       = 12.0f;  // ASSUMED
+inline constexpr float kDefMaxBoost     = 0.0f;   // STEVEN: zero colour on load (was 6.0, ASSUMED)
+inline constexpr float kDefMinCut       = 0.0f;   // STEVEN: zero colour on load (was 12.0, ASSUMED)
 inline constexpr float kDefSensitivity  = -50.0f; // ASSUMED: below this the rider holds (noise floor)
 inline constexpr float kSlowestMs       = 1500.0f;// ASSUMED: SPEED 0%
 inline constexpr float kFastestMs       = 20.0f;  // ASSUMED: SPEED 100%
@@ -333,13 +333,13 @@ inline constexpr int   kDisplayHop      = 256;    // ASSUMED: one scrolling-disp
 } // namespace rd
 
 namespace d4 { // ================================ HEM DARK MATTER 4D ======================================
-inline constexpr float kDefReverb     = 25.0f;  // ASSUMED (protocol 20-35%)
+inline constexpr float kDefReverb     = 0.0f;  // STEVEN: zero colour on load (was 25.0, ASSUMED (protocol 20-35%))
 inline constexpr float kDefDecay      = 3.0f;   // ASSUMED
-inline constexpr float kDefDepth      = 50.0f;  // ASSUMED
+inline constexpr float kDefDepth      = 0.0f;  // STEVEN: zero colour on load (was 50.0, ASSUMED)
 inline constexpr float kDefPredelay   = 20.0f;  // ASSUMED
 inline constexpr float kDefDucking    = 20.0f;  // ASSUMED
 inline constexpr float kDefShape      = 50.0f;  // ASSUMED
-inline constexpr float kDefDelay      = 20.0f;  // ASSUMED (protocol 20-35%)
+inline constexpr float kDefDelay      = 0.0f;  // STEVEN: zero colour on load (was 20.0, ASSUMED (protocol 20-35%))
 inline constexpr int   kDefTime       = 8;      // BRIEF (TIME 1/8d)
 inline constexpr float kDefFeedback   = 35.0f;  // ASSUMED
 inline constexpr float kColorLowHz    = 250.0f; // ASSUMED
@@ -352,16 +352,16 @@ inline constexpr float kGrainWindowMs = 60.0f;  // ASSUMED: 400% MULTIPLIER grai
 } // namespace d4
 
 namespace cb { // ================================ HEM CHAINBREAKER 108 =====================================
-inline constexpr float kDefFlux        = 30.0f;   // ASSUMED (stutter trigger probability per beat)
+inline constexpr float kDefFlux        = 0.0f;   // STEVEN: zero colour on load (was 30.0, ASSUMED (stutter trigger probability per beat))
 inline constexpr float kDefStutX       = 50.0f;   // ASSUMED
 inline constexpr float kDefStutY       = 60.0f;   // ASSUMED
 inline constexpr float kStutFadeMs     = 2.0f;    // ASSUMED click-free gate edges
 inline constexpr int   kStutDivs       = 5;       // ASSUMED: X pad picks 1/2, 1/4, 1/8, 1/16, 1/32 of a beat
 inline constexpr float kDefClipLow     = 200.0f;  // ASSUMED
 inline constexpr float kDefClipHigh    = 3000.0f; // ASSUMED
-inline constexpr float kDefDrive       = 20.0f;   // ASSUMED
+inline constexpr float kDefDrive       = 0.0f;   // STEVEN: zero colour on load (was 20.0, ASSUMED)
 inline constexpr float kDriveMaxGain   = 8.0f;    // ASSUMED: DRIVE 100% -> x8 into the clippers
-inline constexpr float kDefGrainMix    = 25.0f;   // ASSUMED
+inline constexpr float kDefGrainMix    = 0.0f;   // STEVEN: zero colour on load (was 25.0, ASSUMED)
 inline constexpr float kGrainWindowMs  = 45.0f;   // ASSUMED
 inline constexpr float kEqDefHz[4]     = {80.0f, 400.0f, 2500.0f, 10000.0f}; // ASSUMED
 inline constexpr float kBroadcastHz[3] = {100.0f, 1000.0f, 8000.0f};         // ASSUMED

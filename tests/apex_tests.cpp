@@ -26,6 +26,7 @@ void runApexTests() {
     section("APEX meters + display helpers");
     ApexCore e;
     e.prepare(48000, 512);
+    applyColouredBase(e);   // the old coloured starting point (the plug-in itself loads untouched)
     e.params().set(Width, 150);
     e.reset();
     auto in = musicSignal(48000, 3.0, -6.0);

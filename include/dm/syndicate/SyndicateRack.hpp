@@ -43,6 +43,8 @@ inline constexpr auto kRackParams = concatAll(
     detail::bay("mod_on", "mod_solo", "MODULATE"), ModModule::kParams,
     detail::bay("max_on", "max_solo", "MAXIMIZE"), MaxModule::kParams);
 static_assert(kRackParams.size() == kRackN);
+// The old (coloured) defaults the factory presets were written over (see EngineShell::loadPresetValues).
+inline constexpr PresetValue kRackPresetBase[] = {{"saturate", 30}, {"comp", 30}, {"color", 40}, {"mod", 20}, {"depth", 50}, {"multi", 20}};
 
 std::span<const Preset> rackPresets() noexcept;
 
@@ -80,6 +82,12 @@ public:
     [[nodiscard]] int coreLatency() const noexcept { return 0; }
     [[nodiscard]] float limiterLookaheadMs() const noexcept { return a::kZeroLatency ? 0.0f : assumed::kLimiterLookaheadMs; }
     [[nodiscard]] bool coreActive() const noexcept { return satOn_ || dynOn_ || toneOn_ || modOn_ || maxOn_; }
+    [[nodiscard]] bool coreClean(const float* v) const noexcept {   // every bay off or at zero
+        auto off = [v](std::size_t on) { return v[on] < 0.5f; };
+        return (off(kSatOn) || SatModule::clean(v + kSat)) && (off(kDynOn) || (CompModule::clean(v + kComp) && TransientModule::clean(v + kTrans))) &&
+               (off(kToneOn) || ToneModule::clean(v + kTone)) && (off(kModOn) || ModModule::clean(v + kMod)) && (off(kMaxOn) || MaxModule::clean(v + kMax));
+    }
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept { return kRackPresetBase; }
     void afterChunk(int) noexcept { sat_.endChunk(); comp_.endChunk(); mod_.endChunk(); max_.endChunk(); }
 
 private:
@@ -128,6 +136,8 @@ public:
         if constexpr (requires(const Module& m) { m.active(); }) return on_ && m_.active();
         else return on_;
     }
+    [[nodiscard]] bool coreClean(const float* v) const noexcept { return v[kOn] < 0.5f || Module::clean(v + kFirst); }
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept { return kRackPresetBase; }
     void afterChunk(int) noexcept { if constexpr (requires(Module& m) { m.endChunk(); }) m_.endChunk(); }
 private:
     Module m_{};

@@ -58,6 +58,7 @@ bool ironLockGroupsLive(const PluginInfo& info, const Stereo& voice) {
             for (std::size_t k = 0; k < x->paramCount(); ++k) x->set(k, x->desc(k).def);
             x->set(static_cast<std::size_t>(dm::il::Strength), 100.0f);
             x->set(static_cast<std::size_t>(dm::il::Range), 600.0f);
+            x->set(static_cast<std::size_t>(dm::il::Mix), 100.0f);   // MIX loads at 0 (zero colour on load)
             x->reset();
         }
         a->set(static_cast<std::size_t>(dm::il::Groups), 1.0f);
@@ -101,6 +102,14 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
         defaults();
         if (mode == 0 || mode == 4) return;
         if (mode == 5) { if (pairK != skip) e->set(pairK, pairV); return; }
+        if (mode >= 6) {   // 6 / 8: the coloured starting point (the old defaults the factory presets were written over),
+                           // full mix / single voice; 7: the same with ONE other control (pairK) at pairV
+            for (const auto& pv : e->presetBase())
+                for (std::size_t k = 0; k < count; ++k)
+                    if (k != skip && e->desc(k).id == pv.id) e->set(k, pv.value);
+            if (mode == 7 && pairK != skip) e->set(pairK, pairV);
+            return;
+        }
         for (std::size_t k = 0; k < count; ++k) {
             const auto& d = e->desc(k);
             if (k == skip || !sweepable(k) || keepAtDefault(d, k, bypassParam)) continue;
@@ -119,7 +128,7 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
             getOk = hemqa::closeTo(e->get(param), stepped(d) ? std::round(want) : want);
         }
         e->reset();
-        const Stereo o = run(*e, mode == 4 ? voice : full, key);
+        const Stereo o = run(*e, mode == 4 || mode == 8 ? voice : full, key);
         blewUp = !hemqa::finite(o);
         hemqa::Hash h;
         h.add(o);
@@ -179,13 +188,16 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
         // Still silent: a control can depend on what is played (a pitch tool needs a voice) or on ONE other
         // switch (a stutter's rate only matters once FLUX triggers it). Try both before calling it dead.
         if (!live) live = liveIn(4);
+        // Zero colour on load: many controls only act once the colour is up. Try the coloured starting point
+        // (the old defaults the presets were written over), with the full mix and with a single voice.
+        if (!live) live = liveIn(6) || liveIn(8);
         for (std::size_t k = 0; k < count && !live; ++k) {
             if (k == i || !sweepable(k) || keepAtDefault(e->desc(k), k, bypassParam)) continue;
             const auto& dk = e->desc(k);
             for (float o : hemqa::sweepValues(dk.min, dk.def, stepMax(dk), stepped(dk))) {
                 if (o == dk.def) continue;
                 pairK = k; pairV = o;
-                if ((live = liveIn(5))) break;
+                if ((live = liveIn(5) || liveIn(7))) break;
             }
         }
         // IRON LOCK GROUPS shares the scale between instances: it can only be heard with a second instance.
@@ -214,7 +226,7 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
         (void)run(*e, silence, key);
         std::vector<float> quiet;
         for (const auto& s : srcs) quiet.push_back(binding->meter(s.source));
-        (void)run(*e, mode == 4 ? voice : full, key);
+        (void)run(*e, mode == 4 || mode == 8 ? voice : full, key);
         for (std::size_t m = 0; m < srcs.size(); ++m) {
             const float hot = binding->meter(srcs[m].source);
             if (!std::isfinite(hot) || !std::isfinite(quiet[m])) bad[m] = 1;
@@ -224,6 +236,8 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
     };
     auto allMoved = [&] { return std::all_of(moved.begin(), moved.end(), [](int x) { return x != 0; }); };
     for (int mode = 0; mode <= 4; ++mode) meterPass(mode);
+    meterPass(6);   // the coloured starting point (zero colour on load)
+    meterPass(8);
     // Same as the sweep: a meter can need one other control moved (a clipper's meter needs DRIVE to clip).
     for (std::size_t k = 0; k < count && !allMoved(); ++k) {
         if (!sweepable(k) || keepAtDefault(e->desc(k), k, bypassParam)) continue;
@@ -232,6 +246,7 @@ void auditDsp(const PluginInfo& info, hemqa::Report& rep) {
             if (o == dk.def) continue;
             pairK = k; pairV = o;
             meterPass(5);
+            if (!allMoved()) meterPass(7);   // the same, from the coloured starting point
             if (allMoved()) break;
         }
     }

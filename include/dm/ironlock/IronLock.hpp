@@ -43,7 +43,7 @@ inline constexpr std::array<ParamDesc, std::size_t(kParamCount) - std::size_t(G_
     {"pitch_shift", "PITCH SHIFT", -24, 24, 0, "st"},
     {"formant", "FORMANT", -12, 12, 0, "st"},
     {"link", "LINK", 0, 1, 0, "toggle"},
-    {"mix", "MIX", 0, 100, 100, "%"},
+    {"mix", "MIX", 0, 100, 0, "%"},   // STEVEN: zero colour on load (was 100)
 }};
 inline constexpr auto kParams = concatAll(kGlobalParams, kOwnParams);
 
@@ -80,6 +80,11 @@ public:
         return latencySamples() - coreLatency() + (params().get(Quality) >= 0.5f ? latHq_ : latRt_);
     }
     [[nodiscard]] bool coreActive() const noexcept { return active_; }
+    [[nodiscard]] bool coreClean(const float* v) const noexcept { return v[Mix] <= 0.0f; }   // MIX at zero
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept {   // the old default the presets were written over
+        static constexpr PresetValue kBase[] = {{"mix", 100}};
+        return kBase;
+    }
     void afterChunk(int n) noexcept;
 
 private:

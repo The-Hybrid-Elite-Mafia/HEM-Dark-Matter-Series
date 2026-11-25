@@ -28,6 +28,7 @@ void riderBehaviour() {
     }
     OutlawRider e;
     e.prepare(sr, 512);
+    applyColouredBase(e);   // the old coloured starting point (the plug-in itself loads untouched)
     e.params().set(dm::G_AutoGain, 0);
     e.reset();
     const auto out = render(e, in);
@@ -48,7 +49,7 @@ void darkMatterBehaviour() {
     constexpr float sr = 48000;
     section("DARK MATTER 4D: decay, ducking meters, visualizers");
     auto tailDb = [&](float decay) {
-        DarkMatter4D e; e.prepare(sr, 512);
+        DarkMatter4D e; e.prepare(sr, 512); applyColouredBase(e);
         e.params().set(dm::G_AutoGain, 0); e.params().set(Reverb, 50); e.params().set(Delay, 0);
         e.params().set(Decay, decay); e.params().set(Ducking, 0);
         e.reset();
@@ -59,7 +60,7 @@ void darkMatterBehaviour() {
     };
     const double shortT = tailDb(0.5f), longT = tailDb(20.0f);
     check(longT - shortT > 30.0, "tail at 3 s: DECAY 20 s vs 0.5 s (dB louder)", longT - shortT, "dB");
-    DarkMatter4D e; e.prepare(sr, 512);
+    DarkMatter4D e; e.prepare(sr, 512); applyColouredBase(e);
     e.params().set(Ducking, 80);
     e.reset();
     auto in = vocalSignal(sr, 3.0, -6.0);

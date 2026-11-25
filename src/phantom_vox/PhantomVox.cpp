@@ -15,6 +15,7 @@ void PhantomVox::prepare(float sampleRate, int maxBlock) {
     for (Smoother* s : {&inTrim_, &outTrim_, &dynTrim_, &toneTrim_, &spaceTrim_, &sfxTrim_, &revMix_, &dlyMix_})
         s->prepare(20.0f, sr_);
     bypassMix_.prepare(ag::kBypassFadeMs / 4.6f, sr_);
+    cleanMix_.prepare(ag::kBypassFadeMs / 4.6f, sr_);
 
     autoGain_.prepare(sr_, ag::kAutoGainWindowMs, ag::kAutoGainMaxDb);
     limiter_.prepare(sr_, ag::kLimiterLookaheadMs, ag::kLimiterReleaseMs);
@@ -54,13 +55,25 @@ void PhantomVox::reset() noexcept {
     cached_.fill(-1.0e30f);
     updateFromParams(true);
     inTrim_.snap(inTrim_.target); outTrim_.snap(outTrim_.target);
-    for (Smoother* s : {&dynTrim_, &toneTrim_, &spaceTrim_, &sfxTrim_, &revMix_, &dlyMix_, &bypassMix_}) s->snap(s->target);
+    for (Smoother* s : {&dynTrim_, &toneTrim_, &spaceTrim_, &sfxTrim_, &revMix_, &dlyMix_, &bypassMix_, &cleanMix_}) s->snap(s->target);
+}
+
+std::span<const PresetValue> PhantomVox::presetBase() noexcept {
+    static constexpr PresetValue kBase[] = {{"comp", 35}, {"color", 127}, {"deess", 30}, {"hpf", 70},
+                                            {"reverb", 25}, {"delay", 20}, {"sfx", 25}, {"enhancer", 15}};
+    return kBase;
 }
 
 bool PhantomVox::loadPreset(std::size_t index) noexcept {
     const auto presets = factoryPresets();
     if (index >= presets.size()) return false;
     params_.resetToDefaults();
+    // The factory presets were written over the old (coloured) defaults: put those back first, so every preset
+    // still sounds as it did (the plug-in itself now loads with its colour at zero).
+    for (const auto& v : presetBase()) {
+        const int i = params_.indexOf(v.id);
+        if (i >= 0) params_.set(static_cast<std::size_t>(i), v.value);
+    }
     for (const auto& v : presets[index].values) {
         const int i = params_.indexOf(v.id);
         if (i >= 0) params_.set(static_cast<std::size_t>(i), v.value);
@@ -89,6 +102,15 @@ void PhantomVox::updateFromParams(bool force) noexcept {
     inTrim_.setTarget(dbToGain(v[InputTrim]));
     outTrim_.setTarget(dbToGain(v[OutputTrim]));
     bypassMix_.setTarget(on(Bypass) ? 1.0f : 0.0f);
+    {   // every colour control at zero (or its bay off), trims at 0 dB: the voice passes untouched
+        const bool dynClean = !on(DynOn) || (v[Comp] <= 0.0f && v[Color] <= 0.0f && v[DeEss] <= 0.0f && v[Gate] <= -96.0f && v[DynTrim] == 0.0f);
+        const bool toneClean = !on(ToneOn) || (v[Low] == 0.0f && v[Mid] == 0.0f && v[High] == 0.0f && v[Air] == 0.0f && v[Hpf] <= 20.0f &&
+                                               v[Lpf] >= 20000.0f && v[ToneTrim] == 0.0f);
+        const bool spaceClean = !on(SpaceOn) || (v[ReverbMix] <= 0.0f && v[DelayMix] <= 0.0f && !on(SpaceSolo));
+        const bool sfxClean = !on(SfxOn) || (v[Sfx] <= 0.0f && v[Enhancer] <= 0.0f && v[SfxTrim] == 0.0f);
+        const bool clean = dynClean && toneClean && spaceClean && sfxClean && v[InputTrim] == 0.0f && v[OutputTrim] == 0.0f;
+        cleanMix_.setTarget(clean ? 1.0f : 0.0f);
+    }
     autoGainOn_ = on(AutoGainOn);
     const bool anySolo = on(DynSolo) || on(ToneSolo) || on(SpaceSolo) || on(SfxSolo);
     auto active = [&](std::size_t onId, std::size_t soloId) { return on(onId) && (!anySolo || on(soloId)); };
@@ -345,6 +367,9 @@ void PhantomVox::process(float* left, float* right, int numSamples) noexcept {
             const float ot = outTrim_.next();
             l *= ot; r *= ot;
             limiter_.process(l, r);
+            const float cm = cleanMix_.next();   // colour controls all at zero: the voice passes untouched
+            if (cm >= 1.0f) { l = alignedL; r = alignedR; }
+            else if (cm > 0.0f) { l = lerp(l, alignedL, cm); r = lerp(r, alignedR, cm); }
             outPk[0] = std::max(outPk[0], std::fabs(l));
             outPk[1] = std::max(outPk[1], std::fabs(r));
 

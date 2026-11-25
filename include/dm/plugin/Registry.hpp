@@ -29,6 +29,8 @@ public:
     [[nodiscard]] virtual const ParamDesc& desc(std::size_t i) const noexcept = 0;
     [[nodiscard]] virtual float get(std::size_t i) const noexcept = 0;
     virtual void set(std::size_t i, float plain) noexcept = 0;
+    // The old coloured defaults the factory presets were written over (the plug-in itself loads untouched).
+    [[nodiscard]] virtual std::span<const PresetValue> presetBase() const noexcept = 0;
     // Faceplate binding straight onto this engine: its meters, displays and factory presets.
     [[nodiscard]] virtual std::unique_ptr<ui::PanelBinding> binding() = 0;
 };

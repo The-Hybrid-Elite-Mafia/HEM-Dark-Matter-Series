@@ -61,6 +61,11 @@ public:
     void processCore(float& l, float& r) noexcept;
     [[nodiscard]] int coreLatency() const noexcept { return 0; }
     [[nodiscard]] bool coreActive() const noexcept { return revMix_.target > 0.0f || dlyMix_.target > 0.0f || revMix_.value > 0.0f || dlyMix_.value > 0.0f; }
+    [[nodiscard]] bool coreClean(const float* v) const noexcept { return v[Reverb] <= 0.0f && v[Delay] <= 0.0f; }   // no reverb, no delay
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept {   // the old defaults the presets were written over
+        static constexpr PresetValue kBase[] = {{"reverb", 25}, {"depth", 50}, {"delay", 20}};
+        return kBase;
+    }
     void afterChunk(int) noexcept;
 
 private:

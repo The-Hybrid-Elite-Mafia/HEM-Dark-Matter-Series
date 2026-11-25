@@ -46,6 +46,7 @@ public:
         {"saturate", "SATURATE", 0, 100, a::kSatDefault, "%"},
         {"character", "CRISP / WARM", -100, 100, 0, "%"},
     }};
+    [[nodiscard]] static bool clean(const float* v) noexcept { return v[Amount] <= 0.0f; }
     void prepare(float sr);
     void reset() noexcept;
     void update(const float* v, const float* old) noexcept;
@@ -72,6 +73,7 @@ public:
         {"sidechain", "SIDECHAIN", 0, 100, a::kSidechainDefault, "%"},
         {"ext_key", "EXT KEY", 0, 1, 0, "toggle"},   // detector listens to the plug-in's sidechain input
     }};
+    [[nodiscard]] static bool clean(const float* v) noexcept { return v[Amount] <= 0.0f && v[Color] <= 0.0f; }
     void prepare(float sr);
     void reset() noexcept;
     void update(const float* v, const float* old) noexcept;
@@ -96,6 +98,7 @@ public:
         {"transient", "TRANSIENT", -100, 100, 0, "%"},
         {"shape", "SHAPE", 0, 100, 50, "%"},
     }};
+    [[nodiscard]] static bool clean(const float* v) noexcept { return v[Amount] == 0.0f; }
     void prepare(float sr);
     void reset() noexcept;
     void update(const float* v, const float* old) noexcept;
@@ -132,6 +135,10 @@ public:
         {"high_freq", "HIGH HANDLE", -100, 100, 0, "%"},
         {"air_freq", "AIR+ HANDLE", -100, 100, 0, "%"},
     }};
+    [[nodiscard]] static bool clean(const float* v) noexcept {   // flat, both filters wide open
+        for (std::size_t b : {Sub, Low, Mid, HiMid, High, Air}) if (v[b] != 0.0f) return false;
+        return v[Hpf] <= 10.0f && v[Lpf] >= 22000.0f;
+    }
     void prepare(float sr);
     void reset() noexcept;
     void update(const float* v, const float* old) noexcept;
@@ -170,6 +177,7 @@ public:
         {"drift", "DRIFT", 0, 100, 0, "%"},
         {"analog", "ANALOG", 0, 100, 0, "%"},
     }};
+    [[nodiscard]] static bool clean(const float* v) noexcept { return v[Amount] <= 0.0f && v[Drift] <= 0.0f && v[Analog] <= 0.0f; }
     void prepare(float sr);
     void reset() noexcept;
     void update(const float* v, const float* old) noexcept;
@@ -205,6 +213,7 @@ public:
         {"band_mid", "MID AMOUNT", 0, 100, 100, "%"},
         {"band_high", "HIGH AMOUNT", 0, 100, 100, "%"},
     }};
+    [[nodiscard]] static bool clean(const float* v) noexcept { return v[Multi] <= 0.0f && v[Max] <= 0.0f; }
     void prepare(float sr);
     void reset() noexcept;
     void update(const float* v, const float* old) noexcept;

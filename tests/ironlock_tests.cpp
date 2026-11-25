@@ -41,7 +41,7 @@ double measureHz(const std::vector<float>& x, float sr, std::size_t from, std::s
 }
 double cents(double hz, double ref) { return 1200.0 * std::log2(hz / ref); }
 
-std::unique_ptr<IronLock> make(float sr) { auto e = std::make_unique<IronLock>(); e->prepare(sr, 512); return e; }
+std::unique_ptr<IronLock> make(float sr) { auto e = std::make_unique<IronLock>(); e->prepare(sr, 512); applyColouredBase(*e); return e; }
 
 // Harmonic tone (richer than a sine, like a voice) at hz.
 Stereo tone(float sr, double secs, double hz, double amp = 0.3) {
@@ -155,7 +155,7 @@ void runIronLockTests() {
     SuiteCfg<IronLock> c;
     c.name = "HEM IRON LOCK";
     c.vocal = true;
-    c.make = make;
+    c.make = [](float sr) { auto e = std::make_unique<IronLock>(); e->prepare(sr, 512); return e; };   // as a host loads it
     // Voice that sweeps every pitch class (110-260 Hz) while voiced, with vibrato, gaps and sibilants.
     c.customSignal = [](float sr, double secs, double pk) {
         auto s = vocalSignal(sr, secs, pk);

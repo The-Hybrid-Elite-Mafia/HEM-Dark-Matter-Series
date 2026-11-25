@@ -59,7 +59,7 @@ inline constexpr std::array<ParamDesc, std::size_t(kParamCount) - std::size_t(G_
     {"m_flux", "FLUX (MASTER)", 0, 100, 0, "%"},
     {"m_drive", "DRIVE (MASTER)", 0, 100, 0, "%"},
     {"m_tone", "TONE", -100, 100, 0, "%"},
-    {"m_mix", "MIX", 0, 100, 100, "%"},
+    {"m_mix", "MIX", 0, 100, 0, "%"},   // STEVEN: zero colour on load (was 100)
     {"bc_low", "BROADCAST LOW", -12, 12, 0, "dB"}, {"bc_mid", "BROADCAST MID", -12, 12, 0, "dB"},
     {"bc_high", "BROADCAST HIGH", -12, 12, 0, "dB"},
     {"g_sub", "SUB", -6, 6, 0, "dB"}, {"g_low", "LOW", -6, 6, 0, "dB"}, {"g_mid", "MID", -6, 6, 0, "dB"},
@@ -154,6 +154,14 @@ public:
     void processCore(float& l, float& r) noexcept;
     [[nodiscard]] int coreLatency() const noexcept { return 0; }
     [[nodiscard]] bool coreActive() const noexcept { return mix_ > 0.0f; }
+    [[nodiscard]] bool coreClean(const float* v) const noexcept {   // MIX at zero and the utility strip flat
+        for (std::size_t i : {BcLow, BcMid, BcHigh, GSub, GLow, GMid, GHiMid, GHigh}) if (v[i] != 0.0f) return false;
+        return v[MMix] <= 0.0f && v[OutLevel] == 0.0f && v[Width] == 100.0f && v[Crossfeed] <= 0.0f;
+    }
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept {   // the old defaults the presets were written over
+        static constexpr PresetValue kBase[] = {{"flux", 30}, {"drive", 20}, {"grain_mix", 25}, {"m_mix", 100}};
+        return kBase;
+    }
     void afterChunk(int) noexcept;
 
 private:
