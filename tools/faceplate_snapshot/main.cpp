@@ -1,7 +1,8 @@
 // dm_faceplate_snapshot - renders every Dark Matter Series faceplate off-screen with the real faceplate
 // code (reused Hybrid Core OpenGL renderer), after running each engine on a few seconds of test audio so
 // meters and displays are live. Writes one PNG per plug-in.
-//   dm_faceplate_snapshot [--out <folder>] [--width 1920] [--assets <dir>]
+//   dm_faceplate_snapshot [--out <folder>] [--width 1920] [--assets <dir>] [--defaults]
+//   --defaults: no preset loaded, no setting changed (and no extra preset-browser picture): each plug-in as it loads.
 // Windows: hidden GL window (CI uses Mesa's software driver). Linux: headless Mesa EGL.
 // Exit 3 when a faceplate fails to render or comes out blank; exit 4 on a layout problem.
 #include "dm/ui/Faceplates.hpp"
@@ -100,11 +101,13 @@ void vocal(std::vector<float>& l, std::vector<float>& r, double sr, std::size_t 
 int main(int argc, char** argv) {
     fs::path out = "faceplates", assets = "assets";
     int width = 1920;
-    for (int i = 1; i + 1 < argc; ++i) {
+    bool defaults = false;   // --defaults: load no preset and change no setting: each faceplate exactly as the plug-in loads
+    for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
-        if (a == "--out") out = argv[++i];
-        else if (a == "--width") width = std::atoi(argv[++i]);
-        else if (a == "--assets") assets = argv[++i];
+        if (a == "--out" && i + 1 < argc) out = argv[++i];
+        else if (a == "--width" && i + 1 < argc) width = std::atoi(argv[++i]);
+        else if (a == "--assets" && i + 1 < argc) assets = argv[++i];
+        else if (a == "--defaults") defaults = true;
     }
     fs::create_directories(out);
     std::string err;
@@ -147,7 +150,7 @@ int main(int argc, char** argv) {
     };
     static dm::sr::SyndicateRack rack;
     rack.prepare(48000, 512);
-    rack.loadPreset(0);
+    if (!defaults) { rack.loadPreset(0); }
     auto rackBind = bindSyndicate(rack);
     jobs.push_back({"HEM_SYNDICATE_RACK", [&](const std::function<void()>& t) { feedShell(rack, t); }, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden()});
     static dm::sr::HemSat sSat; static dm::sr::HemComp sComp; static dm::sr::HemTransient sTrans;
@@ -156,7 +159,7 @@ int main(int argc, char** argv) {
     sTone.prepare(48000, 512); sMod.prepare(48000, 512); sMax.prepare(48000, 512);
     static auto bSat = bindSplit(sSat), bComp = bindSplit(sComp), bTrans = bindSplit(sTrans);
     static auto bTone = bindSplit(sTone), bMod = bindSplit(sMod), bMax = bindSplit(sMax);
-    bSat->loadPreset(0); bComp->loadPreset(0); bTrans->loadPreset(2); bTone->loadPreset(0); bMod->loadPreset(12); bMax->loadPreset(1);
+    if (!defaults) { bSat->loadPreset(0); bComp->loadPreset(0); bTrans->loadPreset(2); bTone->loadPreset(0); bMod->loadPreset(12); bMax->loadPreset(1); }
     jobs.push_back({"HEM_SAT", [&](const std::function<void()>& t) { feedShell(sSat, t); }, [&]() -> PanelBinding& { return *bSat; }, splitPanel(SplitKind::Sat), shellHidden()});
     jobs.push_back({"HEM_COMP", [&](const std::function<void()>& t) { feedShell(sComp, t); }, [&]() -> PanelBinding& { return *bComp; }, splitPanel(SplitKind::Comp), shellHidden()});
     jobs.push_back({"HEM_TRANSIENT", [&](const std::function<void()>& t) { feedShell(sTrans, t); }, [&]() -> PanelBinding& { return *bTrans; }, splitPanel(SplitKind::Transient), shellHidden()});
@@ -166,29 +169,29 @@ int main(int argc, char** argv) {
     static dm::ax::ApexCore apex;
     apex.prepare(48000, 512);
     static auto bApex = bindApex(apex);
-    bApex->loadPreset(0);
+    if (!defaults) { bApex->loadPreset(0); }
     jobs.push_back({"HEM_APEX_CORE", [&](const std::function<void()>& t) { feedShell(apex, t); }, [&]() -> PanelBinding& { return *bApex; }, apexPanel(), shellHidden()});
     static dm::il::IronLock iron;
     iron.prepare(48000, 512);
     static auto bIron = bindIronLock(iron);
-    bIron->loadPreset(0);
+    if (!defaults) { bIron->loadPreset(0); }
     jobs.push_back({"HEM_IRON_LOCK", [&](const std::function<void()>& t) { feedShell(iron, t); }, [&]() -> PanelBinding& { return *bIron; }, ironLockPanel(), shellHidden()});
     static dm::rd::OutlawRider rider;
     rider.prepare(48000, 512);
     static auto bRider = bindRider(rider);
-    bRider->loadPreset(0);
+    if (!defaults) { bRider->loadPreset(0); }
     jobs.push_back({"HEM_OUTLAW_RIDER", [&](const std::function<void()>& t) { feedShell(rider, t); }, [&]() -> PanelBinding& { return *bRider; }, riderPanel(), shellHidden()});
     static dm::d4::DarkMatter4D dm4;
     dm4.prepare(48000, 512);
     static auto bDm = bindDarkMatter(dm4);
-    bDm->loadPreset(0);
+    if (!defaults) { bDm->loadPreset(0); }
     jobs.push_back({"HEM_DARK_MATTER_4D", [&](const std::function<void()>& t) { feedShell(dm4, t); }, [&]() -> PanelBinding& { return *bDm; }, darkMatterPanel(), tempoHidden(static_cast<int>(dm::d4::Tempo))});
     static dm::cb::Chainbreaker108 chain;
     chain.prepare(48000, 512);
     static auto bChain = bindChainbreaker(chain);
-    bChain->loadPreset(0);
+    if (!defaults) { bChain->loadPreset(0); }
     jobs.push_back({"HEM_CHAINBREAKER_108", [&](const std::function<void()>& t) { feedShell(chain, t); }, [&]() -> PanelBinding& { return *bChain; }, chainbreakerPanel(), tempoHidden(static_cast<int>(dm::cb::Tempo))});
-    jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [](const std::function<void()>&) {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
+    if (!defaults) jobs.push_back({"HEM_SYNDICATE_RACK_PRESETS", [](const std::function<void()>&) {}, [&]() -> PanelBinding& { return *rackBind; }, syndicatePanel(), shellHidden(), 7});
 
     int failures = 0;
     for (auto& job : jobs) {

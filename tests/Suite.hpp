@@ -37,6 +37,7 @@ struct SuiteCfg {
     std::function<const char*(std::size_t)> presetName;
     Ctx activeCtx;
     std::function<Stereo(float, std::size_t)> keySignal;      // when set: every-control renders also feed this sidechain key
+    std::function<void(E&)> colour;                           // extra settings for the coloured starting point (after presetBase)
     std::function<Stereo(float, double, double)> customSignal; // overrides vocal/music material when set                             // settings that make the engine do something (for bypass/autogain checks)
 };
 
@@ -83,9 +84,28 @@ inline Stereo delayedBy(const Stereo& in, int lat) {
     return d;
 }
 
+// Steven's zero-colour rule: every plug-in LOADS with its colour at zero and passes the sound untouched.
+// The quality checks below still run on the old (coloured) starting point - the engine's presetBase(), the
+// values the factory presets were written over - so every control, limiter and meter is still exercised.
 template <class E>
-void runSuite(const SuiteCfg<E>& c) {
+void applyColouredBase(E& e) {
+    for (const auto& v : e.presetBase()) {
+        const int i = e.params().indexOf(v.id);
+        if (i >= 0) e.params().set(static_cast<std::size_t>(i), v.value);
+    }
+    e.reset();
+}
+
+template <class E>
+void runSuite(const SuiteCfg<E>& cIn) {
     constexpr float sr = 48000.0f;
+    SuiteCfg<E> c = cIn;
+    c.make = [raw = cIn.make, col = cIn.colour](float rate) {
+        auto e = raw(rate);
+        applyColouredBase(*e);
+        if (col) { col(*e); e->reset(); }
+        return e;
+    };
     const double ceiling = std::pow(10.0, -0.1 / 20.0);
     auto signalAt = [&](float rate, double secs, double pk) {
         if (c.customSignal) return c.customSignal(rate, secs, pk);
@@ -123,6 +143,29 @@ void runSuite(const SuiteCfg<E>& c) {
         check(maxErr == 0.0, "bypassed output == latency-aligned input", maxErr);
     }
 
+    section("Loads untouched: every colour control at zero on load (Steven's rule)");
+    {
+        for (double pk : {-6.0, -1.0, 0.0}) {
+            auto e = cIn.make(sr);   // the plug-in exactly as a host loads it
+            e->reset();
+            const auto in = signal(4.0, pk);
+            const auto out = render(*e, in);
+            const auto ref = delayedBy(in, e->latencySamples());
+            double maxErr = 0;
+            for (std::size_t i = 0; i < in.size(); ++i)
+                maxErr = std::max({maxErr, double(std::fabs(out.l[i] - ref.l[i])), double(std::fabs(out.r[i] - ref.r[i]))});
+            check(maxErr == 0.0, ("on load, " + std::to_string(int(pk)) + " dBFS peaks: max |out - aligned input|").c_str(), maxErr);
+        }
+        // and the colour still comes in when a control is turned up (the coloured starting point differs)
+        auto plain = cIn.make(sr), coloured = c.make(sr);
+        const auto in = signal(3.0, -6.0);
+        const auto a = render(*plain, in), b = render(*coloured, in);
+        const double dr = diffRms(a, b);
+        bool hasBase = false;
+        for (const auto& v : plain->presetBase()) hasBase |= plain->params().indexOf(v.id) >= 0;
+        if (hasBase) check(dr > 1e-5, "turning the colour up changes the sound (diff RMS dBFS)", db(dr), "dBFS");
+    }
+
     // ---- Default load + presets ----------------------------------------------------------------------
     section("Default load + factory presets: no clip, level within tolerance");
     auto levelCheck = [&](E& e, const std::string& label) {
@@ -142,8 +185,14 @@ void runSuite(const SuiteCfg<E>& c) {
         auto e = c.make(sr);
         const auto hot = signal(4.0, 0.0);
         const auto ho = render(*e, hot);
-        const double pk = std::max(peak(ho.l), peak(ho.r));
-        check(pk <= ceiling + 1e-6, "defaults with 0 dBFS input: peak (dBFS)", db(pk), "dBFS");
+        const auto href = delayedBy(hot, e->latencySamples());
+        double pk = 0;   // every sample is either held under the ceiling or the untouched input itself
+        for (std::size_t i = 0; i < ho.size(); ++i)
+            for (int ch = 0; ch < 2; ++ch) {
+                const float o = ch ? ho.r[i] : ho.l[i], x = ch ? href.r[i] : href.l[i];
+                if (o != x) pk = std::max(pk, double(std::fabs(o)));
+            }
+        check(pk <= ceiling + 1e-6, "defaults with 0 dBFS input: peak of processed samples (dBFS)", db(pk), "dBFS");
     }
     for (std::size_t p = 0; p < c.presetCount; ++p) {
         auto e = c.make(sr);
@@ -172,8 +221,18 @@ void runSuite(const SuiteCfg<E>& c) {
             }
             e->process(out.l.data() + pos, out.r.data() + pos, int(std::min<std::size_t>(256, out.size() - pos)));
         }
-        const double pk = std::max(peak(out.l), peak(out.r));
-        check(pk <= ceiling + 1e-6, "max output peak over the sweep (dBFS)", db(pk), "dBFS");
+        const auto sref = delayedBy(in, e->latencySamples());
+        // never louder than the ceiling, except where the over-driven input itself passes untouched (all colour at zero,
+        // and the 10 ms crossfade out of that): no sample may ever be louder than both the ceiling and the input
+        double over = 0, pk = 0;
+        for (std::size_t i = 0; i < out.size(); ++i)
+            for (int ch = 0; ch < 2; ++ch) {
+                const double o = std::fabs(ch ? out.r[i] : out.l[i]), x = std::fabs(ch ? sref.r[i] : sref.l[i]);
+                over = std::max(over, o - std::max(ceiling, x));
+                if (o > x) pk = std::max(pk, o);
+            }
+        check(over <= 1e-6, "sweep: no sample louder than both -0.1 dBFS and the input (excess)", over);
+        check(pk <= ceiling + 1e-6, "max output peak over the sweep where louder than the input (dBFS)", db(std::max(pk, 1e-12)), "dBFS");
         check(allFinite(out), "all samples finite", 1);
     }
 

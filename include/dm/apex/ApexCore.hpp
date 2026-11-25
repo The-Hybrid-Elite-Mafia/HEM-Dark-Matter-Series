@@ -62,6 +62,13 @@ public:
     void processCore(float& l, float& r) noexcept;
     [[nodiscard]] int coreLatency() const noexcept { return 0; }
     [[nodiscard]] bool coreActive() const noexcept { return active_; }
+    [[nodiscard]] bool coreClean(const float* v) const noexcept {   // AMOUNT and BOOST at zero, image untouched
+        return v[Amount] <= 0.0f && v[Boost] <= 0.0f && v[Width] == 100.0f && v[MonoSafe] < 0.5f;
+    }
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept {   // the old defaults the presets were written over
+        static constexpr PresetValue kBase[] = {{"amount", 127}, {"boost", 20}};
+        return kBase;
+    }
     void afterChunk(int) noexcept;
 
 private:

@@ -133,7 +133,7 @@ float PanelWindow::defaultScale(const ui::PanelDef&) noexcept {
     RECT work{};
     if (::SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0)) {
         const float fitW = 0.9f * static_cast<float>(work.right - work.left) / ui::frame::kW;
-        const float fitH = 0.9f * static_cast<float>(work.bottom - work.top) / ui::frame::kH;
+        const float fitH = 0.85f * static_cast<float>(work.bottom - work.top) / ui::frame::kH;   // like the other HEM sets: room for the host's title bar and buttons
         scale = std::max(0.15f, std::min({scale, fitW, fitH}));
     }
     return scale;

@@ -87,6 +87,8 @@ public:
     PhantomVox();
 
     void prepare(float sampleRate, int maxBlock);
+    // The old (coloured) defaults the factory presets were written over (the plug-in loads with colour at zero).
+    [[nodiscard]] static std::span<const PresetValue> presetBase() noexcept;
     void reset() noexcept;
     void process(float* left, float* right, int numSamples) noexcept;
 
@@ -121,7 +123,7 @@ private:
     Activity activity_{};
 
     // Global
-    Smoother inTrim_{}, outTrim_{}, bypassMix_{};
+    Smoother inTrim_{}, outTrim_{}, bypassMix_{}, cleanMix_{};   // cleanMix_: every colour control at zero -> untouched
     AutoGain autoGain_{};
     BrickwallLimiter limiter_{};
     std::array<DelayLine, 2> dryDelay_{};

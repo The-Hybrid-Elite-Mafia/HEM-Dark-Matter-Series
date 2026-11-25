@@ -14,6 +14,9 @@
 //   void processCore(float& l, float& r) noexcept;                          // one stereo frame
 //   [[nodiscard]] int coreLatency() const noexcept;                         // samples
 //   [[nodiscard]] bool coreActive() const noexcept;                         // false -> core skipped (CPU)
+// Optional: [[nodiscard]] bool coreClean(const float* v) const noexcept;   // true -> every colour control at zero:
+//   with INPUT / OUTPUT at 0 dB the sound then passes untouched (latency-aligned, bit-exact once settled; the core
+//   keeps running underneath so the meters stay live; 10 ms crossfade when a control moves off zero).
 #include "dm/Assumed.hpp"
 #include "dm/core/Dynamics.hpp"
 #include "dm/core/Params.hpp"
@@ -66,6 +69,7 @@ public:
         inTrim_.prepare(20.0f, sr_);
         outTrim_.prepare(20.0f, sr_);
         bypassMix_.prepare(assumed::kBypassFadeMs / 4.6f, sr_);
+        cleanMix_.prepare(assumed::kBypassFadeMs / 4.6f, sr_);
         autoGain_.prepare(sr_, self().autoGainWindowMs(), assumed::kAutoGainMaxDb);
         limiter_.prepare(sr_, self().limiterLookaheadMs(), assumed::kLimiterReleaseMs);
         self().prepareCore(sr_);
@@ -87,6 +91,7 @@ public:
         inTrim_.snap(inTrim_.target);
         outTrim_.snap(outTrim_.target);
         bypassMix_.snap(bypassMix_.target);
+        cleanMix_.snap(cleanMix_.target);
     }
 
     // External sidechain (key) for the NEXT process() call only: two buffers of numSamples, not trimmed,
@@ -132,6 +137,9 @@ public:
                 const float ot = outTrim_.next();
                 l *= ot; r *= ot;
                 limiter_.process(l, r);
+                const float cm = cleanMix_.next();   // colour controls all at zero: the sound passes untouched
+                if (cm >= 1.0f) { l = alignedL; r = alignedR; }
+                else if (cm > 0.0f) { l = lerp(l, alignedL, cm); r = lerp(r, alignedR, cm); }
                 outPk[0] = std::max(outPk[0], std::fabs(l));
                 outPk[1] = std::max(outPk[1], std::fabs(r));
                 if (bp > 0.0f) { l = lerp(l, alignedL, bp); r = lerp(r, alignedR, bp); }
@@ -161,6 +169,12 @@ public:
 
     bool loadPresetValues(std::span<const PresetValue> values) noexcept {
         params_.resetToDefaults();
+        // Factory presets were written over the old (coloured) defaults: put those back first, so every
+        // preset still sounds exactly as it did (the plug-in itself now loads with its colour at zero).
+        for (const auto& v : self().presetBase()) {
+            const int i = params_.indexOf(v.id);
+            if (i >= 0) params_.set(static_cast<std::size_t>(i), v.value);
+        }
         bool ok = true;
         for (const auto& v : values) {
             const int i = params_.indexOf(v.id);
@@ -175,6 +189,8 @@ public:
     [[nodiscard]] float limiterLookaheadMs() const noexcept { return assumed::kLimiterLookaheadMs; }
     [[nodiscard]] float autoGainWindowMs() const noexcept { return assumed::kAutoGainWindowMs; }
     void afterChunk(int) noexcept {}
+    [[nodiscard]] bool coreClean(const float*) const noexcept { return false; }
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept { return {}; }
 
 protected:
     Derived& self() noexcept { return static_cast<Derived&>(*this); }
@@ -191,6 +207,7 @@ protected:
         inTrim_.setTarget(dbToGain(v[G_Input]));
         outTrim_.setTarget(dbToGain(v[G_Output]));
         bypassMix_.setTarget(v[G_Bypass] >= 0.5f ? 1.0f : 0.0f);
+        cleanMix_.setTarget(v[G_Input] == 0.0f && v[G_Output] == 0.0f && self().coreClean(v.data()) ? 1.0f : 0.0f);
         autoGainOn_ = v[G_AutoGain] >= 0.5f;
         self().updateCore(v.data(), force ? nullptr : cached_.data(), force);
         cached_ = v;
@@ -213,7 +230,7 @@ protected:
 
 private:
     ShellMeters meters_{};
-    Smoother inTrim_{}, outTrim_{}, bypassMix_{};
+    Smoother inTrim_{}, outTrim_{}, bypassMix_{}, cleanMix_{};
     AutoGain autoGain_{};
     BrickwallLimiter limiter_{};
     std::array<DelayLine, 2> dryDelay_{}, refDelay_{};

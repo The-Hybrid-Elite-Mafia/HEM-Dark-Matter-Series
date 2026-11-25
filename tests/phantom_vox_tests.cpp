@@ -29,9 +29,20 @@ namespace {
 constexpr float kSr = 48000.0f;
 const double kCeiling = std::pow(10.0, -0.1 / 20.0);
 
-std::unique_ptr<PhantomVox> make(float sr = kSr) {
+// The plug-in exactly as a host loads it (colour at zero, sound untouched).
+std::unique_ptr<PhantomVox> makeRaw(float sr = kSr) {
     auto e = std::make_unique<PhantomVox>();
     e->prepare(sr, 512);
+    return e;
+}
+// The old coloured starting point (what the factory presets were written over): the quality checks run on it.
+std::unique_ptr<PhantomVox> make(float sr = kSr) {
+    auto e = makeRaw(sr);
+    for (const auto& v : PhantomVox::presetBase()) {
+        const int i = e->params().indexOf(v.id);
+        if (i >= 0) e->params().set(static_cast<std::size_t>(i), v.value);
+    }
+    e->reset();
     return e;
 }
 
@@ -100,8 +111,19 @@ void testDefaultLoad() {
 
     // Protocol defaults.
     const auto& t = paramTable();
-    check(t[ReverbMix].def >= 20 && t[ReverbMix].def <= 35, "REVERB default mix within 20-35%", t[ReverbMix].def, "%");
-    check(t[DelayMix].def >= 20 && t[DelayMix].def <= 35, "DELAY default mix within 20-35%", t[DelayMix].def, "%");
+    // Steven's zero-colour rule replaces the old 20-35% mix rule: REVERB and DELAY load at 0%.
+    check(t[ReverbMix].def == 0, "REVERB default mix 0% (zero colour on load)", t[ReverbMix].def, "%");
+    check(t[DelayMix].def == 0, "DELAY default mix 0% (zero colour on load)", t[DelayMix].def, "%");
+    for (double pk : {-6.0, -1.0, 0.0}) {
+        auto e = makeRaw();
+        const auto in = vocalSignal(kSr, 4.0, pk);
+        const auto out = render(*e, in);
+        const auto ref = delayed(in, e->latencySamples());
+        double maxErr = 0;
+        for (std::size_t i = 0; i < in.size(); ++i)
+            maxErr = std::max({maxErr, double(std::fabs(out.l[i] - ref.l[i])), double(std::fabs(out.r[i] - ref.r[i]))});
+        check(maxErr == 0.0, ("on load, " + std::to_string(int(pk)) + " dBFS peaks: max |out - aligned input|").c_str(), maxErr);
+    }
     check(dm::assumed::pv::kChorusRateHz > 0 && dm::assumed::pv::kPhaserRateHz > 0 &&
           dm::assumed::pv::kTapeWowHz > 0, "all SFX LFO rates active (> 0 Hz)", dm::assumed::pv::kChorusRateHz, "Hz");
 }

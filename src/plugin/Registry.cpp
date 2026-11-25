@@ -34,6 +34,7 @@ public:
     [[nodiscard]] const ParamDesc& desc(std::size_t i) const noexcept override { return e_.params().desc(i); }
     [[nodiscard]] float get(std::size_t i) const noexcept override { return e_.params().get(i); }
     void set(std::size_t i, float v) noexcept override { e_.params().set(i, v); }
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept override { return e_.presetBase(); }
     [[nodiscard]] std::unique_ptr<ui::PanelBinding> binding() override { return bind_(e_); }
 
 private:

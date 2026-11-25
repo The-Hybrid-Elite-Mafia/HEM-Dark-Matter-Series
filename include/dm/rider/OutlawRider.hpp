@@ -48,6 +48,13 @@ public:
     void processCore(float& l, float& r) noexcept;
     [[nodiscard]] int coreLatency() const noexcept { return 0; }
     [[nodiscard]] bool coreActive() const noexcept { return range_ > 0.0f || out_ != 1.0f; }
+    [[nodiscard]] bool coreClean(const float* v) const noexcept {   // nothing to ride: no boost and no cut (or RANGE 0)
+        return (v[Range] <= 0.0f || (v[MaxBoost] <= 0.0f && v[MinCut] <= 0.0f)) && v[RiderOut] == 0.0f;
+    }
+    [[nodiscard]] std::span<const PresetValue> presetBase() const noexcept {   // the old defaults the presets were written over
+        static constexpr PresetValue kBase[] = {{"max_boost", 6}, {"min_cut", 12}};
+        return kBase;
+    }
     [[nodiscard]] float autoGainWindowMs() const noexcept { return a::kAutoGainWindowMs; }
 
 private:

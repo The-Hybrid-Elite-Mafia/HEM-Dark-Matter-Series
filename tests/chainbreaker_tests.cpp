@@ -33,7 +33,7 @@ void runChainbreakerTests() {
     constexpr float sr = 48000;
     auto in = musicSignal(sr, 4.0, -6.0);
     {
-        Chainbreaker108 e; e.prepare(sr, 512);
+        Chainbreaker108 e; e.prepare(sr, 512); applyColouredBase(e);
         e.params().set(Flux, 100); e.params().set(Drive, 90);
         e.reset();
         float hz = 0, cp = 0;
@@ -52,7 +52,7 @@ void runChainbreakerTests() {
         // Every Quick-Load chain recalls a different chain (different audio).
         std::vector<Stereo> outs;
         for (std::size_t q = 0; q < quickLoadChains().size(); ++q) {
-            Chainbreaker108 e; e.prepare(sr, 512);
+            Chainbreaker108 e; e.prepare(sr, 512); applyColouredBase(e);
             e.params().set(dm::G_AutoGain, 0);
             e.params().set(Flux, 60); e.params().set(Drive, 40); e.params().set(Eq1G, 4); e.params().set(GrainMix, 40);
             e.loadChain(q);
@@ -67,7 +67,7 @@ void runChainbreakerTests() {
     {
         // Dragging modules into a different order changes the result (order matters: clip before vs after EQ).
         auto run = [&](float t1, float t2) {
-            Chainbreaker108 e; e.prepare(sr, 512);
+            Chainbreaker108 e; e.prepare(sr, 512); applyColouredBase(e);
             e.params().set(dm::G_AutoGain, 0);
             e.params().set(Drive, 80); e.params().set(Eq1G, 12);
             e.params().set(S1Type, t1); e.params().set(S2Type, t2); e.params().set(S3On, 0); e.params().set(S4On, 0);
